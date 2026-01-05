@@ -32,12 +32,14 @@ func main() {
 		cancel()
 	}()
 
+	queue := thumbnails.NewQueue()
+
 	store, err := catalog.OpenSQLite("catalog.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 	meta := &metadata.NoopReader{}
-	thumbs := &thumbnails.Logger{}
+	thumbs := &thumbnails.Queue{}
 
 	idx := &indexer.Indexer{
 		Workers:      4,
@@ -66,6 +68,8 @@ func main() {
 	if err := idx.Run(ctx, []string{root}); err != nil {
 		log.Fatalf("Indexing failed: %v", err)
 	}
+
+	log.Print(queue.Size())
 
 	log.Println("Indexing complete")
 }

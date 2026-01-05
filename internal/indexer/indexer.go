@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/olidotjpeg/bridge-clone/internal/catalog"
 )
 
@@ -20,6 +21,10 @@ type MetadataReader interface {
 
 type Thumbnailer interface {
 	Enqueue(assetID, path string)
+	Dequeue() (int, error)
+	Front() (int, error)
+	IsEmpty() bool
+	Size() int
 }
 
 type Indexer struct {
@@ -108,6 +113,7 @@ func (i *Indexer) worker(
 
 	for job := range jobs {
 		asset := catalog.Asset{
+			ID:         uuid.NewString(),
 			Path:       job.Path,
 			FileSize:   job.Info.Size,
 			ModifiedAt: job.Info.ModifiedAt,
