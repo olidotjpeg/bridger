@@ -2,18 +2,28 @@ package main
 
 import (
 	"context"
+	"embed"
+	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/gorilla/mux"
 	"github.com/olidotjpeg/bridge-clone/internal/catalog"
 	"github.com/olidotjpeg/bridge-clone/internal/indexer"
 	"github.com/olidotjpeg/bridge-clone/internal/metadata"
 	"github.com/olidotjpeg/bridge-clone/internal/thumbnails"
+	"github.com/rs/cors"
 )
 
+//go:embed frontend
+var frontendFolder embed.FS
+
 func main() {
+	router := mux.NewRouter()
+
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: photoapp <folder-to-index>")
 	}
@@ -72,4 +82,16 @@ func main() {
 	log.Print(queue.Size())
 
 	log.Println("Indexing complete")
+
+	router.PathPrefix("/").Handler(ClientHandler())
+
+	// Use default options
+	handler := cors.Default().Handler(router)
+	http.ListenAndServe(":8000", handler)
+}
+
+func ClientHandler() http.Handler {
+	embedContent := fs.FS(frontendFolder)
+	contentStatic, _ := fs.Sub(embedContent, "frontend")
+	return http.FileServer(http.FS(contentStatic))
 }

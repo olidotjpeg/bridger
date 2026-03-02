@@ -24,8 +24,8 @@ func NewQueue() *Queue {
 func (q *Queue) Enqueue(assetID, path string) {
 	log.Printf("ASSETID %s", assetID)
 	log.Printf("PATH %s", path)
-	asset := QueueAsset{assetID: assetID, path: path}
-	q.data.PushBack(asset)
+	// asset := QueueAsset{assetID: assetID, path: path}
+	// q.data.PushBack(asset)
 }
 
 func (q *Queue) Dequeue() (int, error) {
