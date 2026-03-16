@@ -1,95 +1,121 @@
-1. High-Level Architecture
+# Architecture
 
-    Frontend (React): A lightweight single-page application (SPA). It will communicate with the backend via a RESTful API and display images, ratings, and tags.
+## 1. High-Level Architecture
 
-    Backend (Golang): Serves a dual purpose:
+**Frontend (React):** A lightweight single-page application (SPA). Communicates with the backend via a RESTful API and displays images, ratings, and tags. Uses TanStack Query for server state (caching, pagination, background refetch, and cache invalidation — critical since the indexer mutates data in the background).
 
-        API Server: Handles requests from the React app (fetch images, update ratings, add tags).
+**Backend (Golang):** Serves a dual purpose:
 
-        Background Worker: Scans your designated photo directories, extracts metadata (EXIF), generates thumbnails, and updates the database.
+- **API Server:** Handles requests from the React app (fetch images, update ratings, add tags, trigger scans).
+- **Background Worker:** Scans designated photo directories, extracts metadata (EXIF), generates thumbnails, and updates the database.
 
-    Database: SQLite is highly recommended for this. Since it's an internal tool running locally or on a private server, SQLite is incredibly fast, requires zero setup, and keeps your app self-contained.
+**Database:** SQLite. Since this is an internal tool running locally or on a private server, SQLite is fast, requires zero setup, and keeps the app self-contained.
 
-    Storage: Your local file system or an attached NAS where your master photos live.
+**Storage:** Local file system or an attached NAS where master photos live. Thumbnails are stored in a separate cache directory (e.g., `~/.bridge-clone/thumbs/`), referenced by path in the database.
 
-2. The Database Schema (SQLite)
+---
 
-You'll need a relational structure to easily filter by tags and ratings.
-Table	Columns	Description
-images	id, file_path, filename, file_hash, rating, capture_date, width, height	Stores the core metadata. file_hash (like MD5 or SHA1) is crucial to track files if you move or rename them.
-tags	id, name	Your library of available tags (e.g., "Wedding", "Landscape", "Client_Smith").
-image_tags	image_id, tag_id	A junction table connecting images to their tags (Many-to-Many relationship).
-3. Backend Plan (Golang)
+## 2. Database Schema (SQLite)
 
-Go will do the heavy lifting. You can break the backend down into three main modules:
-A. The Indexer / Discovery Engine
+| Table | Columns | Description |
+| --- | --- | --- |
+| `images` | `id, file_path, filename, file_hash, rating, capture_date, width, height, file_size, mime_type, thumbnail_path, indexed_at` | Core metadata. `file_hash` tracks files across moves/renames. `thumbnail_path` decouples the indexer from the API. `indexed_at` detects stale records. |
+| `tags` | `id, name` | Tag library (e.g., "Wedding", "Landscape", "Client_Smith"). |
+| `image_tags` | `image_id, tag_id` | Junction table for the many-to-many relationship. |
 
-    Directory Scanning: Use filepath.WalkDir to scan your root photo folder.
+**Required indexes:**
 
-    Concurrency: Use Goroutines to process multiple files in parallel (e.g., a worker pool of 4-8 workers to parse files without freezing your OS).
+- `images(rating)`
+- `images(capture_date)`
+- `image_tags(tag_id)`
+- `image_tags(image_id)`
 
-    File Watching (Optional but awesome): Implement the fsnotify library to watch your folders. When you dump new photos from your SD card into the folder, Go detects it and indexes them instantly.
+**Note on file hashing:** MD5/SHA1 on full 30–50MB RAW files is slow. Use `size + mtime + first N bytes` as a fast identity check, falling back to a full hash only on collision. For most cases, `file_path + mtime` is sufficient.
 
-B. Image Processing & Metadata
+---
 
-    EXIF Parsing: Use a library like github.com/dsoprea/go-exif to extract the capture date, camera model, lens, and ISO.
+## 3. Backend Plan (Golang)
 
-    Thumbnail Generation: Crucial step. Do not send 30MB RAW or JPEG files to the React frontend. Your Go backend must generate lightweight WebP or JPEG thumbnails (e.g., 400px wide) and serve those to the UI. Look into github.com/disintegration/imaging.
+### A. The Indexer / Discovery Engine
 
-    (Note on RAW files: If you shoot RAW (CR2, NEF, ARW), you'll need Go to extract the embedded JPEG preview. Libraries or wrappers around exiftool or dcraw can handle this).
+- **Directory Scanning:** Use `filepath.WalkDir` to scan the root photo folder.
+- **Concurrency:** Use a worker pool of 4–8 goroutines to process files in parallel without saturating the OS.
+- **Job Status:** Maintain an in-memory scan job state (total files, processed, errors) so the API can expose scan progress to the UI.
+- **File Watching (optional):** Use `fsnotify` to watch folders and index new files automatically when photos are copied in from an SD card.
 
-C. The API Server
+### B. Image Processing & Metadata
 
-Use a lightweight framework like Gin, Fiber, or even Go's new standard library router (Go 1.22+).
+- **EXIF Parsing:** Use `github.com/dsoprea/go-exif` to extract capture date, camera model, lens, and ISO.
+- **Thumbnail Generation:** Generate WebP or JPEG thumbnails (e.g., 400px wide) and cache them to disk. Never send full-res files to the grid view. Use `github.com/disintegration/imaging`.
+- **RAW Files:** For CR2, NEF, ARW, etc., extract the embedded JPEG preview using a wrapper around `exiftool` or `dcraw`. Treat this as a first-class concern, not an afterthought.
 
-    GET /api/images (with query params for pagination, rating filters, and tag filters)
+### C. The API Server
 
-    GET /api/images/:id/thumbnail (serves the generated thumbnail)
+Use a lightweight framework: Gin, Fiber, or Go's standard library router (Go 1.22+).
 
-    GET /api/images/:id/full (serves the full-res image for detailed viewing)
+#### Images
 
-    POST /api/images/:id/rate (updates the star rating)
+- `GET /api/images` — list images with query params: `page`, `limit`, `rating`, `tags`, `sort` (capture_date, rating, filename), `order` (asc, desc)
+- `GET /api/images/:id/thumbnail` — serve cached thumbnail
+- `GET /api/images/:id/full` — serve full-res image
+- `PATCH /api/images/:id` — update rating and/or tags in a single request
 
-    POST /api/images/:id/tags (adds/removes tags)
+#### Tags
 
-4. Frontend Plan (React)
+- `GET /api/tags` — list all available tags (required for the sidebar)
+- `POST /api/tags` — create a new tag
 
-Keep the UI clean and dark-themed (standard for photo editing apps to make colors pop).
+#### Indexer
 
-    Virtualization: If you have 10,000 photos, rendering 10,000 DOM elements will crash the browser. Use a library like react-window or react-virtuoso to create an "infinite scrolling" masonry grid that only renders the images currently visible on screen.
+- `POST /api/scan` — trigger a re-index of the configured directories
+- `GET /api/scan/status` — poll current scan progress (total, processed, errors)
 
-    State Management: Since the app is simple, standard React Context or a lightweight library like Zustand will be perfect to handle the currently selected image, current search filters, and selected tags.
+---
 
-    Components:
+## 4. Frontend Plan (React)
 
-        Sidebar: Checkboxes for tags, star rating filters (1 to 5), and a search bar.
+Keep the UI clean and dark-themed (standard for photo apps — makes colors pop).
 
-        Grid View: The main masonry layout showing your thumbnails.
+### State Management
 
-        Detail Modal / View: When clicking an image, show the larger version, detailed EXIF data, and input fields to quickly add tags or change the rating.
+- **TanStack Query** for all server state: image lists, tag lists, scan status. Handles caching, background refetch, and cache invalidation automatically.
+- **Zustand** (or React Context) for local UI state only: selected image, active filters, multi-selection set.
 
-5. Recommended Project Phases
+### Key Components
 
-    Phase 1: The Foundation (CLI & DB)
+- **Sidebar:** Tag checkboxes, star rating filter (1–5 + unrated), sort controls, search bar, and a "Scan" button with progress indicator.
+- **Grid View:** Virtualized masonry layout using `react-virtuoso` or `react-window`. Only renders thumbnails visible in the viewport — essential for libraries of 10k+ photos.
+- **Detail Modal / View:** Larger image preview, full EXIF data, tag input, and star rating control.
 
-        Set up the Go project and SQLite database.
+### Keyboard Shortcuts (Core UX)
 
-        Write a Go script that traverses a folder, finds JPEGs, and saves their paths to the database.
+Keyboard-driven culling is the primary workflow. These are non-negotiable:
 
-    Phase 2: Image Processing
+| Key | Action |
+| --- | --- |
+| `←` / `→` | Navigate to previous/next image |
+| `1` – `5` | Set star rating |
+| `0` | Clear rating |
+| `x` | Mark as rejected |
+| `Space` | Select/deselect image (bulk ops) |
+| `Enter` | Open detail view |
+| `Escape` | Close detail view |
 
-        Add EXIF extraction to your Go script.
+### Bulk Operations
 
-        Implement the thumbnail generator so every indexed image gets a corresponding low-res cached version.
+- Select multiple images (Space or click + Shift-click)
+- Bulk rate selected images
+- Bulk tag selected images
 
-    Phase 3: The API
+---
 
-        Wrap your Go logic in an HTTP server so it can serve the database data and image files over localhost.
+## 5. Project Phases
 
-    Phase 4: The React Frontend
-
-        Build the grid UI. Connect it to the API to fetch and display the thumbnails.
-
-    Phase 5: Interactivity
-
-        Add the UI for tagging and rating. Wire up the API calls to update the SQLite database.
+| Phase | Focus |
+| --- | --- |
+| **1 – Foundation** | Go project structure, SQLite schema + migrations, directory scanner CLI (no API yet) |
+| **2 – Image Processing** | EXIF extraction, thumbnail generation, RAW preview support |
+| **3 – API (Read-only)** | HTTP server serving image list, thumbnail, full-res, tag list, scan status |
+| **4 – React UI (Read-only)** | Grid view, virtualization, sidebar filters, detail modal — all read-only |
+| **5 – Write Operations** | Rating + tagging via UI, keyboard shortcuts, bulk operations |
+| **6 – Live Watching** | `fsnotify` integration, scan progress endpoint, sidebar scan button |
