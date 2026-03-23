@@ -6,7 +6,7 @@
 
 ## Tasks
 
-### [ ] 1. Initialise the Go module, project structure, and dependencies
+### [x] 1. Initialise the Go module, project structure, and dependencies
 
 Set up the Go module, create the folder layout, and pull in the SQLite driver.
 
