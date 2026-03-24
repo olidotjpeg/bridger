@@ -1,0 +1,14 @@
+# Binary output
+tmp/
+cmd/main/
+
+# Database
+*.db
+
+# IDE / editor
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
