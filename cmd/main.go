@@ -1,13 +1,19 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/olidotjpeg/bridger/internal/db"
 )
 
 func main() {
-	fmt.Print("Hello world")
+	database, err := db.Database()
 
-	db.RunMigrations()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = db.RunMigrations(database)
+
+	log.Fatal(err)
 }

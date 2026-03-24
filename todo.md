@@ -42,7 +42,7 @@ import _ "modernc.org/sqlite"
 
 ---
 
-### [ ] 2. Write the database schema and migration runner
+### [X] 2. Write the database schema and migration runner
 
 Create the SQLite tables and indexes the app will use. Rather than running raw SQL manually, write a simple migration runner in Go so the schema is always set up automatically on first run.
 
