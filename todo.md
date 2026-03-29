@@ -6,7 +6,7 @@
 
 ## Tasks
 
-### [x] 1. Initialise the Go module, project structure, and dependencies
+### [X] 1. Initialise the Go module, project structure, and dependencies
 
 Set up the Go module, create the folder layout, and pull in the SQLite driver.
 
@@ -94,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_image_tags_image_id ON image_tags(image_id);
 
 ---
 
-### [ ] 3. Implement the directory scanner
+### [X] 3. Implement the directory scanner
 
 Write a function that walks a root directory and returns a list of all photo files found.
 

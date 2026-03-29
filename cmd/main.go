@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/olidotjpeg/bridger/internal/db"
+	walk "github.com/olidotjpeg/bridger/internal/walker"
 )
 
 func main() {
@@ -15,5 +17,11 @@ func main() {
 
 	err = db.RunMigrations(database)
 
-	log.Fatal(err)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	results, _ := walk.WalkDirectory("./internal/walker/TestData")
+
+	fmt.Print(len(results))
 }
