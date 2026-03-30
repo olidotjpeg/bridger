@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS images (
     capture_date   DATETIME,
     width          INTEGER,
     height         INTEGER,
-    indexed_at     DATETIME NOT NULL
+    index_at     DATETIME NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -132,7 +132,7 @@ Keep this function pure — it should just return a list of paths, not touch the
 
 ---
 
-### [ ] 4. Upsert discovered images into the database
+### [X] 4. Upsert discovered images into the database
 
 For each file found by the scanner, check whether it already exists in the database. If not, insert it. If the file has changed (different size), update it. If it's unchanged, skip it.
 
@@ -151,11 +151,11 @@ if err == nil && existingSize == currentFileSize {
 **Inserting / updating:** Use `INSERT ... ON CONFLICT` (not `INSERT OR REPLACE`). This is important because `INSERT OR REPLACE` actually deletes the old row first, which would wipe out any ratings or tags added later in Phase 5.
 
 ```sql
-INSERT INTO images (file_path, filename, file_size, mime_type, indexed_at)
+INSERT INTO images (file_path, filename, file_size, mime_type, index_at)
 VALUES (?, ?, ?, ?, ?)
 ON CONFLICT(file_path) DO UPDATE SET
     file_size  = excluded.file_size,
-    indexed_at = excluded.indexed_at
+    index_at = excluded.index_at
 ```
 
 This only updates the columns the scanner "owns" and leaves user data (rating, tags) untouched.
@@ -168,7 +168,7 @@ This only updates the columns the scanner "owns" and leaves user data (rating, t
 | `filename` | `filepath.Base(path)` |
 | `file_size` | `os.Stat(path).Size()` |
 | `mime_type` | Derive from file extension (e.g., `.jpg` → `image/jpeg`) |
-| `indexed_at` | `time.Now().UTC()` |
+| `index_at` | `time.Now().UTC()` |
 
 **How to verify:** Run the upsert on a folder with 5 images. Check the DB has 5 rows. Run it again — all 5 should be skipped. Change one file's size (e.g., re-save it), run again — 1 updated, 4 skipped.
 
@@ -176,7 +176,7 @@ This only updates the columns the scanner "owns" and leaves user data (rating, t
 
 ---
 
-### [ ] 5. Wire up the CLI entry point
+### [X] 5. Wire up the CLI entry point
 
 Bring everything together in `cmd/main.go`. The program should accept command-line flags and run the full scan.
 
@@ -219,3 +219,79 @@ Done.
 4. Run with a non-existent directory — should print a clear error, not a panic
 
 **Done when:** The CLI scans a directory, persists results to SQLite, prints a summary, and handles re-runs and bad input gracefully.
+
+---
+
+# Phase 2 – Image Processing
+
+> Goal: extract metadata from photo files, generate thumbnails, and add RAW file support. Builds on Phase 1's scanner and database.
+
+---
+
+## Tasks
+
+### [X] 1. EXIF extraction
+
+Parse EXIF metadata from photo files and store it in the database.
+
+**Library:** `github.com/rwcarlsen/goexif/exif`
+
+**Fields to extract and store:**
+
+| Field | DB Column |
+| --- | --- |
+| Capture date | `capture_date` |
+| Camera model | (future — not in schema yet) |
+| Image width | `width` |
+| Image height | `height` |
+
+**Steps:**
+
+1. Add `go-exif` as a dependency
+2. Write an `ExtractEXIF(path string)` function in a new `internal/exif/` package
+3. Call it during the upsert loop in `main.go` and populate `capture_date`, `width`, `height`
+4. Update the `ON CONFLICT DO UPDATE` in `UpsertImagePath` to also update these columns
+
+**Error handling:** EXIF data is often missing or malformed — log and skip gracefully, don't fail the whole scan.
+
+**Done when:** After a scan, `capture_date`, `width`, and `height` are populated for files that have valid EXIF data.
+
+---
+
+### [ ] 2. Thumbnail generation
+
+Generate a small cached thumbnail for each image and store its path in the database.
+
+**Library:** `github.com/disintegration/imaging`
+
+**Spec:**
+- Resize to 400px wide, maintaining aspect ratio
+- Output format: JPEG or WebP
+- Cache location: `~/.bridger/thumbs/` (or configurable via `--thumbs` flag)
+- Filename: derived from a hash of the original path to avoid collisions
+
+**Steps:**
+
+1. Add `github.com/davidbyttow/govips/v2` as a dependency (`brew install vips` required)
+2. Write a `GenerateThumbnail(srcPath, thumbDir string) (string, error)` function in a new `internal/thumbs/` package
+3. Skip thumbnail generation if one already exists and the source file hasn't changed
+4. Store the thumbnail path in `thumbnail_path` on the images row
+
+**Done when:** After a scan, each image has a thumbnail on disk and `thumbnail_path` is populated in the DB.
+
+---
+
+### [ ] 3. RAW file support
+
+Support CR2, NEF, ARW and other RAW formats by extracting their embedded JPEG preview.
+
+**Approach:** Use a wrapper around `exiftool` or `dcraw` to extract the embedded JPEG, then treat it like any other image for thumbnail generation and EXIF parsing.
+
+**Steps:**
+
+1. Add `.cr2`, `.nef`, `.arw` to the extensions list in the walker
+2. Write a `ExtractRAWPreview(path, outDir string) (string, error)` function in `internal/raw/`
+3. Detect RAW files by extension and run preview extraction before thumbnail generation
+4. Fall back gracefully if `exiftool`/`dcraw` is not installed — log a warning, skip the file
+
+**Done when:** RAW files appear in the DB with thumbnails generated from their embedded previews.
