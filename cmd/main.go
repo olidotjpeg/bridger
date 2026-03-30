@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/olidotjpeg/bridger/internal/db"
 	"github.com/olidotjpeg/bridger/internal/exif"
 	walk "github.com/olidotjpeg/bridger/internal/walker"
@@ -12,6 +13,8 @@ import (
 
 func main() {
 	walkDir, dbPath := setupCLIFlags()
+	vips.Startup(nil)
+	defer vips.Shutdown()
 
 	database, err := db.Database(dbPath)
 

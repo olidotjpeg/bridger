@@ -262,7 +262,7 @@ Parse EXIF metadata from photo files and store it in the database.
 
 Generate a small cached thumbnail for each image and store its path in the database.
 
-**Library:** `github.com/disintegration/imaging`
+**Library:** `github.com/davidbyttow/govips/v2` (requires `brew install vips`)
 
 **Spec:**
 - Resize to 400px wide, maintaining aspect ratio
