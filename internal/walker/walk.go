@@ -19,9 +19,16 @@ type FileInfo struct {
 	Height      int
 }
 
-func WalkDirectory(walkingPath string) ([]FileInfo, error) {
+var mimeTypes = map[string]string{
+	".cr2": "image/x-canon-cr2",
+	".nef": "image/x-nikon-nef",
+	".arw": "image/x-sony-arw",
+	".raf": "image/x-fuji-raf",
+}
+
+func WalkDirectory(walkingPath string, thumbDir string) ([]FileInfo, error) {
 	var paths []FileInfo
-	var extensions = []string{".png", ".jpg", ".jpeg"}
+	var extensions = []string{".png", ".jpg", ".jpeg", ".cr2", ".nef", ".arw", ".raf"}
 
 	err := filepath.WalkDir(walkingPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -40,7 +47,10 @@ func WalkDirectory(walkingPath string) ([]FileInfo, error) {
 		}
 
 		if d.IsDir() {
-			return nil // Skip directories just in case
+			if filepath.Clean(path) == filepath.Clean(thumbDir) {
+				return fs.SkipDir
+			}
+			return nil
 		}
 
 		if !hasExtension(path, extensions) {
@@ -54,11 +64,16 @@ func WalkDirectory(walkingPath string) ([]FileInfo, error) {
 			return nil
 		}
 
+		mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+		if mimeType == "" {
+			mimeType = mimeTypes[strings.ToLower(filepath.Ext(path))]
+		}
+
 		currentPath := FileInfo{
 			Path:     absoluteFilePath,
 			Size:     info.Size(),
 			FileName: filepath.Base(path),
-			MimeType: mime.TypeByExtension(strings.ToLower(filepath.Ext(path))),
+			MimeType: mimeType,
 		}
 
 		paths = append(paths, currentPath)

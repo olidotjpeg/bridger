@@ -258,7 +258,7 @@ Parse EXIF metadata from photo files and store it in the database.
 
 ---
 
-### [ ] 2. Thumbnail generation
+### [X] 2. Thumbnail generation
 
 Generate a small cached thumbnail for each image and store its path in the database.
 
@@ -281,7 +281,7 @@ Generate a small cached thumbnail for each image and store its path in the datab
 
 ---
 
-### [ ] 3. RAW file support
+### [X] 3. RAW file support
 
 Support CR2, NEF, ARW and other RAW formats by extracting their embedded JPEG preview.
 
@@ -295,3 +295,340 @@ Support CR2, NEF, ARW and other RAW formats by extracting their embedded JPEG pr
 4. Fall back gracefully if `exiftool`/`dcraw` is not installed — log a warning, skip the file
 
 **Done when:** RAW files appear in the DB with thumbnails generated from their embedded previews.
+
+---
+
+# Phase 3 – API (Read-only)
+
+> Goal: expose the indexed photo library over HTTP so a frontend can consume it. All endpoints are read-only — write operations (ratings, tags) come in Phase 5.
+
+---
+
+## Tasks
+
+### [X] 1. Set up the HTTP server
+
+Add a lightweight HTTP server to the existing Go project using Go's standard library router (Go 1.22+) or Gin.
+
+**Steps:**
+
+1. Add the router dependency if using Gin: `go get github.com/gin-gonic/gin`
+2. Create `internal/api/server.go` with a `NewServer(db *sql.DB) http.Handler` function
+3. Register all routes in one place
+4. Wire the server into `cmd/main.go` — it should start after migrations run
+
+**Done when:** `go run ./cmd/main.go` starts an HTTP server and responds to requests.
+
+---
+
+### [X] 2. `GET /api/images`
+
+List images with pagination and filtering.
+
+**Query params:**
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `page` | int | Page number (default: 1) |
+| `limit` | int | Results per page (default: 50) |
+| `rating` | int | Filter by minimum rating |
+| `sort` | string | `capture_date`, `rating`, `filename` (default: `capture_date`) |
+| `order` | string | `asc` or `desc` (default: `desc`) |
+
+**Response shape:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "filename": "DSC_001.jpg",
+      "capture_date": "2024-12-01T10:00:00Z",
+      "width": 6000,
+      "height": 4000,
+      "rating": 0,
+      "mime_type": "image/jpeg",
+      "thumbnail_path": "/api/images/1/thumbnail"
+    }
+  ],
+  "total": 1842,
+  "page": 1,
+  "limit": 50
+}
+```
+
+**Done when:** Endpoint returns paginated, filterable image records from the database.
+
+---
+
+### [X] 3. `GET /api/images/:id/thumbnail`
+
+Serve the cached thumbnail file from disk.
+
+**Steps:**
+
+1. Look up `thumbnail_path` in the DB by `id`
+2. Serve the file with the correct `Content-Type` header (`image/jpeg`)
+3. Return `404` if the image or thumbnail doesn't exist
+
+**Done when:** The browser can load a thumbnail by hitting this endpoint.
+
+---
+
+### [X] 4. `GET /api/images/:id/full`
+
+Serve the full-resolution image from its original path on disk.
+
+**Steps:**
+
+1. Look up `file_path` in the DB by `id`
+2. Serve the file with the correct `Content-Type` from `mime_type`
+3. Return `404` if the record or file doesn't exist
+
+**Done when:** The browser can load the full-res image by hitting this endpoint.
+
+---
+
+### [X] 5. `GET /api/tags`
+
+List all tags in the database.
+
+**Response shape:**
+```json
+[
+  { "id": 1, "name": "Wedding" },
+  { "id": 2, "name": "Landscape" }
+]
+```
+
+**Done when:** Endpoint returns all tags from the `tags` table.
+
+---
+
+### [ ] 6. `POST /api/scan` and `GET /api/scan/status`
+
+Trigger a re-index and expose scan progress.
+
+**`POST /api/scan`** — starts a background scan of the configured directory. Returns immediately with `202 Accepted`.
+
+**`GET /api/scan/status`** — returns the current scan state:
+```json
+{
+  "running": true,
+  "total": 1842,
+  "processed": 412,
+  "errors": 3
+}
+```
+
+**Steps:**
+
+1. Move the scan loop from `main.go` into a function that can be called both at startup and via the API
+2. Store scan state in a struct protected by a `sync.Mutex`
+3. Expose the state via `GET /api/scan/status`
+
+**Done when:** A POST to `/api/scan` triggers a background scan and `/api/scan/status` reflects live progress.
+
+---
+
+# Phase 4 – React UI (Read-only)
+
+> Goal: a working frontend that displays the photo library using the Phase 3 API. No write operations yet — just browsing, filtering, and viewing.
+
+---
+
+## Tasks
+
+### [ ] 1. Set up the React project
+
+Scaffold the frontend inside the repo and configure it to proxy API requests to the Go backend.
+
+**Steps:**
+
+1. Create the React app: `npm create vite@latest web -- --template react-ts`
+2. Install dependencies: `npm install @tanstack/react-query zustand`
+3. Configure the dev proxy to forward `/api` requests to `http://localhost:8080`
+4. Add a `npm run dev` script and confirm the app loads
+
+**Done when:** `npm run dev` starts the frontend and API requests reach the Go server.
+
+---
+
+### [ ] 2. Image grid with virtualization
+
+Display thumbnails in a masonry/grid layout. Must handle 10k+ images without performance issues.
+
+**Steps:**
+
+1. Install `react-virtuoso` or `react-window` for virtualized rendering
+2. Fetch the first page of images from `GET /api/images` using TanStack Query
+3. Render thumbnails using `GET /api/images/:id/thumbnail`
+4. Implement infinite scroll or pagination to load more images
+
+**Done when:** The grid renders thumbnails and loads more as the user scrolls, without rendering off-screen items.
+
+---
+
+### [ ] 3. Sidebar with filters
+
+Add a sidebar for filtering and sorting the image grid.
+
+**Controls to include:**
+
+- Sort by: `capture_date`, `rating`, `filename`
+- Order: ascending / descending
+- Filter by minimum star rating (1–5 + unrated)
+- Tag checkboxes (fetched from `GET /api/tags`)
+
+**Done when:** Changing filters updates the grid in real time via TanStack Query cache invalidation.
+
+---
+
+### [ ] 4. Detail modal / view
+
+Show a larger image preview with full metadata when an image is clicked.
+
+**Content to display:**
+
+- Full-res image via `GET /api/images/:id/full`
+- Filename, capture date, dimensions, MIME type
+- Star rating (display only at this stage)
+- Tags applied to the image (display only)
+
+**Done when:** Clicking an image opens the detail view with metadata and the full-res image loads.
+
+---
+
+### [ ] 5. Keyboard navigation
+
+Implement keyboard shortcuts for browsing. These are core to the culling workflow.
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` | Previous / next image |
+| `Enter` | Open detail view |
+| `Escape` | Close detail view |
+
+**Done when:** The user can navigate the library entirely by keyboard without touching the mouse.
+
+---
+
+# Phase 5 – Write Operations
+
+> Goal: add rating, tagging, and bulk operations so the app becomes a usable culling tool.
+
+---
+
+## Tasks
+
+### [ ] 1. `PATCH /api/images/:id` — update rating and tags
+
+Add the write endpoint to the Go API.
+
+**Request body:**
+```json
+{ "rating": 4, "tags": [1, 3] }
+```
+
+**Steps:**
+
+1. Update `rating` on the `images` row
+2. Sync `image_tags` — delete removed tags, insert new ones
+3. Return the updated image record
+
+**Done when:** A PATCH request updates rating and tags atomically without losing other fields.
+
+---
+
+### [ ] 2. `POST /api/tags` — create a new tag
+
+**Request body:**
+```json
+{ "name": "Wedding" }
+```
+
+Returns the created tag with its `id`. Returns `409 Conflict` if the name already exists.
+
+**Done when:** New tags can be created via the API.
+
+---
+
+### [ ] 3. Star rating UI
+
+Add interactive star rating to the detail view and grid.
+
+**Steps:**
+
+1. Render 5 clickable stars on the detail view
+2. On click, call `PATCH /api/images/:id` with the new rating
+3. Invalidate the image query so the grid reflects the change immediately
+4. Wire up keyboard shortcuts `1`–`5` to set rating, `0` to clear
+
+**Done when:** Clicking stars or pressing `1`–`5` updates the rating and the grid reflects it.
+
+---
+
+### [ ] 4. Tag management UI
+
+Allow adding and removing tags from images in the detail view.
+
+**Steps:**
+
+1. Show existing tags as removable chips
+2. Add a text input with autocomplete from `GET /api/tags`
+3. Allow creating new tags inline
+4. On change, call `PATCH /api/images/:id` with the updated tag list
+
+**Done when:** Tags can be added, removed, and created from the detail view.
+
+---
+
+### [ ] 5. Bulk operations
+
+Allow selecting multiple images and applying a rating or tag to all of them.
+
+**Steps:**
+
+1. Toggle selection with `Space` or `Shift`+click
+2. Show a bulk action bar when images are selected
+3. Apply rating or tags to all selected images via `PATCH /api/images/:id` (one request per image)
+4. Add `x` key to mark selected images as rejected (rating = -1 or a dedicated rejected flag)
+
+**Done when:** The user can select multiple images and bulk-rate or bulk-tag them in one action.
+
+---
+
+# Phase 6 – Live Watching
+
+> Goal: automatically detect new photos when they are copied from an SD card or added to the watch folder, without requiring a manual scan.
+
+---
+
+## Tasks
+
+### [ ] 1. `fsnotify` folder watcher
+
+Watch the configured photo directory for new files and trigger indexing automatically.
+
+**Steps:**
+
+1. Add `github.com/fsnotify/fsnotify` as a dependency
+2. Create `internal/watcher/watcher.go` with a `Watch(dir string, onFile func(path string)) error` function
+3. On `Create` events, check the file extension and run the existing scan pipeline (EXIF + thumbnail + upsert)
+4. Start the watcher as a goroutine in `main.go` alongside the HTTP server
+
+**Done when:** Copying a photo into the watch folder triggers automatic indexing within a few seconds.
+
+---
+
+### [ ] 2. Scan progress in the sidebar
+
+Show live scan progress in the React sidebar using the `GET /api/scan/status` endpoint.
+
+**Steps:**
+
+1. Poll `GET /api/scan/status` every 2 seconds when `running: true` using TanStack Query
+2. Display a progress bar or counter: "Scanning… 412 / 1842"
+3. Stop polling when `running: false`
+4. Add a manual "Scan" button that calls `POST /api/scan`
+
+**Done when:** The sidebar shows live progress during a scan and updates automatically when new files are detected.
