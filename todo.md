@@ -404,7 +404,7 @@ List all tags in the database.
 
 ---
 
-### [ ] 6. `POST /api/scan` and `GET /api/scan/status`
+### [X] 6. `POST /api/scan` and `GET /api/scan/status`
 
 Trigger a re-index and expose scan progress.
 
@@ -440,16 +440,44 @@ Trigger a re-index and expose scan progress.
 
 ### [ ] 1. Set up the React project
 
-Scaffold the frontend inside the repo and configure it to proxy API requests to the Go backend.
+Scaffold the frontend inside the repo, configure the dev proxy, and wire up Go's `embed` so the production build is served from a single binary.
 
 **Steps:**
 
 1. Create the React app: `npm create vite@latest web -- --template react-ts`
 2. Install dependencies: `npm install @tanstack/react-query zustand`
-3. Configure the dev proxy to forward `/api` requests to `http://localhost:8080`
-4. Add a `npm run dev` script and confirm the app loads
+3. Configure the Vite dev proxy in `vite.config.ts` to forward `/api` and `/thumbs` to `http://localhost:8080`:
+```ts
+server: {
+    proxy: {
+        '/api': 'http://localhost:8080',
+        '/thumbs': 'http://localhost:8080',
+    }
+}
+```
+4. Set the Vite build output to `web/dist`
+5. Add the embed to `cmd/main.go`:
+```go
+//go:embed web/dist
+var staticFiles embed.FS
 
-**Done when:** `npm run dev` starts the frontend and API requests reach the Go server.
+router.StaticFS("/", http.FS(staticFiles))
+```
+6. Add a `justfile` with two recipes:
+```just
+dev:
+    go run ./cmd/main.go & cd web && npm run dev
+
+build:
+    cd web && npm run build
+    go build ./cmd/main.go
+```
+
+**Development:** run `just dev` — Vite serves the frontend on port 5173 and proxies API calls to Go on port 8080.
+
+**Production:** run `just build` — produces a single Go binary with the frontend embedded.
+
+**Done when:** `just dev` runs both servers, API requests reach Go, and `just build` produces a working single binary.
 
 ---
 

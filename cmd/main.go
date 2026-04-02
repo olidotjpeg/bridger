@@ -1,8 +1,10 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/davidbyttow/govips/v2/vips"
@@ -10,6 +12,9 @@ import (
 	"github.com/olidotjpeg/bridger/internal/db"
 	"github.com/olidotjpeg/bridger/internal/scanner"
 )
+
+//go:embed web/dist
+var staticFiles embed.FS
 
 func main() {
 	walkDir, dbPath, thumbDir := setupCLIFlags()
@@ -37,6 +42,7 @@ func main() {
 		ThumbDir: thumbDir,
 	})
 
+	router.StaticFS("/", http.FS(staticFiles))
 	router.Static("/thumbs", thumbDir)
 
 	if err != nil {
