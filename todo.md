@@ -438,7 +438,7 @@ Trigger a re-index and expose scan progress.
 
 ## Tasks
 
-### [ ] 1. Set up the React project
+### [X] 1. Set up the React project
 
 Scaffold the frontend inside the repo, configure the dev proxy, and wire up Go's `embed` so the production build is served from a single binary.
 
@@ -481,18 +481,18 @@ build:
 
 ---
 
-### [ ] 2. Image grid with virtualization
+### [ ] 2. Paginated image grid
 
-Display thumbnails in a masonry/grid layout. Must handle 10k+ images without performance issues.
+Display thumbnails in a CSS grid with pagination. Thumbnails are uniform size so no virtualization is needed.
 
 **Steps:**
 
-1. Install `react-virtuoso` or `react-window` for virtualized rendering
-2. Fetch the first page of images from `GET /api/images` using TanStack Query
-3. Render thumbnails using `GET /api/images/:id/thumbnail`
-4. Implement infinite scroll or pagination to load more images
+1. Fetch images from `GET /api/images?page=1&limit=50` using TanStack Query
+2. Render thumbnails in a CSS grid using the `/thumbs/` static path
+3. Add previous/next page buttons that update the `page` query param
+4. Show loading and error states
 
-**Done when:** The grid renders thumbnails and loads more as the user scrolls, without rendering off-screen items.
+**Done when:** The grid renders a page of thumbnails and pagination buttons move between pages.
 
 ---
 
@@ -505,24 +505,24 @@ Add a sidebar for filtering and sorting the image grid.
 - Sort by: `capture_date`, `rating`, `filename`
 - Order: ascending / descending
 - Filter by minimum star rating (1–5 + unrated)
-- Tag checkboxes (fetched from `GET /api/tags`)
 
 **Done when:** Changing filters updates the grid in real time via TanStack Query cache invalidation.
 
 ---
 
-### [ ] 4. Detail modal / view
+### [ ] 4. Lightbox
 
-Show a larger image preview with full metadata when an image is clicked.
+Clicking a thumbnail opens a full-screen lightbox with the full-res image and prev/next navigation.
 
-**Content to display:**
+**Steps:**
 
-- Full-res image via `GET /api/images/:id/full`
-- Filename, capture date, dimensions, MIME type
-- Star rating (display only at this stage)
-- Tags applied to the image (display only)
+1. Track `selectedId` in state — `null` means closed
+2. On thumbnail click, set `selectedId` and render the lightbox overlay
+3. Load full-res image via `GET /api/images/:id/full`
+4. Display metadata: filename, capture date, dimensions, MIME type
+5. Prev/next arrows navigate through the current page's images
 
-**Done when:** Clicking an image opens the detail view with metadata and the full-res image loads.
+**Done when:** Clicking a thumbnail opens the lightbox, full-res image loads, and arrows navigate between images.
 
 ---
 
@@ -532,11 +532,10 @@ Implement keyboard shortcuts for browsing. These are core to the culling workflo
 
 | Key | Action |
 | --- | --- |
-| `←` / `→` | Previous / next image |
-| `Enter` | Open detail view |
-| `Escape` | Close detail view |
+| `←` / `→` | Previous / next image in lightbox |
+| `Escape` | Close lightbox |
 
-**Done when:** The user can navigate the library entirely by keyboard without touching the mouse.
+**Done when:** The user can navigate the lightbox entirely by keyboard without touching the mouse.
 
 ---
 

@@ -4,7 +4,6 @@ import (
 	"embed"
 	"flag"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/davidbyttow/govips/v2/vips"
@@ -42,7 +41,6 @@ func main() {
 		ThumbDir: thumbDir,
 	})
 
-	router.StaticFS("/", http.FS(staticFiles))
 	router.Static("/thumbs", thumbDir)
 
 	if err != nil {

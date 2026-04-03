@@ -9,5 +9,9 @@ export default defineConfig({
         '/api': 'http://localhost:8080',
         '/thumbs': 'http://localhost:8080',
     }
+  },
+  build: {
+    outDir: "../cmd/web/dist",
+    emptyOutDir: true
   }
 })
