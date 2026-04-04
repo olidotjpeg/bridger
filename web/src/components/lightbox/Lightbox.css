@@ -1,0 +1,36 @@
+.lightbox {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    width: 100%;
+    height: 100%;
+}
+
+.lightbox::before {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 80%);
+}
+
+.lightbox .lightbox-wrapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    width: 100%;
+    text-align: center;
+    padding: 0 10%;
+}
+
+.lightbox .lightbox-wrapper img {
+    width: 100%;
+}
+
+.lightbox .lightbox-wrapper .meta {
+    color: #fff;
+    text-align: left;
+}

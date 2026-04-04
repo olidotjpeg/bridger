@@ -29,7 +29,7 @@ async function fetchImages(page: number): Promise<ImagesResponse> {
 
 function App() {
   const [page, setPage] = useState(1)
-  const [selectedId, setSelectedId] = useState(0)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['images', page],
@@ -52,7 +52,7 @@ function App() {
         <LightBox
           images={data?.data}
           selectedId={selectedId}
-          onClose={() => setSelectedId(0)}
+          onClose={() => setSelectedId(null)}
           onNavigate={setSelectedId}
         />
        : <></>

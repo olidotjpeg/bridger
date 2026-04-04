@@ -481,7 +481,7 @@ build:
 
 ---
 
-### [ ] 2. Paginated image grid
+### [X] 2. Paginated image grid
 
 Display thumbnails in a CSS grid with pagination. Thumbnails are uniform size so no virtualization is needed.
 
@@ -496,21 +496,7 @@ Display thumbnails in a CSS grid with pagination. Thumbnails are uniform size so
 
 ---
 
-### [ ] 3. Sidebar with filters
-
-Add a sidebar for filtering and sorting the image grid.
-
-**Controls to include:**
-
-- Sort by: `capture_date`, `rating`, `filename`
-- Order: ascending / descending
-- Filter by minimum star rating (1–5 + unrated)
-
-**Done when:** Changing filters updates the grid in real time via TanStack Query cache invalidation.
-
----
-
-### [ ] 4. Lightbox
+### [X] 3. Lightbox
 
 Clicking a thumbnail opens a full-screen lightbox with the full-res image and prev/next navigation.
 
@@ -526,7 +512,7 @@ Clicking a thumbnail opens a full-screen lightbox with the full-res image and pr
 
 ---
 
-### [ ] 5. Keyboard navigation
+### [X] 4. Keyboard navigation
 
 Implement keyboard shortcuts for browsing. These are core to the culling workflow.
 
@@ -547,7 +533,25 @@ Implement keyboard shortcuts for browsing. These are core to the culling workflo
 
 ## Tasks
 
-### [ ] 1. `PATCH /api/images/:id` — update rating and tags
+### [ ] 1. Filtering and sorting (full-stack)
+
+Update the API to accept sort/filter params and add a sidebar to the UI.
+
+**API changes in `GetImagesWithCount`:**
+- Accept `sort` (`capture_date`, `rating`, `filename`) and `order` (`asc`, `desc`) params
+- Accept `rating` param to filter by minimum rating
+- Whitelist `sort` values to prevent SQL injection
+
+**Sidebar controls:**
+- Sort by: `capture_date`, `rating`, `filename`
+- Order: ascending / descending
+- Filter by minimum star rating (1–5 + unrated)
+
+**Done when:** Changing sidebar filters updates the grid in real time via TanStack Query cache invalidation.
+
+---
+
+### [ ] 2. `PATCH /api/images/:id` — update rating and tags
 
 Add the write endpoint to the Go API.
 
