@@ -1,6 +1,8 @@
 package walk
 
 import (
+	"io/fs"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -30,13 +32,22 @@ func TestHasExtension(t *testing.T) {
 }
 
 func TestWalkDirectory(t *testing.T) {
-	paths, err := WalkDirectory("./TestData")
+	paths, err := WalkDirectory("./TestData", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(paths) != 6 {
-		t.Errorf("got %d paths, want 6", len(paths))
+	extensions := []string{".png", ".jpg", ".jpeg", ".cr2", ".nef", ".arw", ".raf"}
+	expected := 0
+	filepath.WalkDir("./TestData", func(path string, d fs.DirEntry, _ error) error {
+		if !d.IsDir() && hasExtension(path, extensions) {
+			expected++
+		}
+		return nil
+	})
+
+	if len(paths) != expected {
+		t.Errorf("got %d paths, want %d", len(paths), expected)
 	}
 
 	for _, p := range paths {
@@ -56,7 +67,7 @@ func TestWalkDirectory(t *testing.T) {
 }
 
 func TestWalkDirectoryInvalidPath(t *testing.T) {
-	paths, err := WalkDirectory("./nonexistent")
+	paths, err := WalkDirectory("./nonexistent", "")
 	if err == nil {
 		t.Error("expected error for non-existent path, got nil")
 	}

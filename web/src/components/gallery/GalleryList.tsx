@@ -1,12 +1,12 @@
-import type { Image } from "../../App"
+import type { Image } from "../../api/images"
 import "./Gallery.css"
 
-interface IProps {
+interface GalleryListProps {
     images: Image[] | null;
     onSelectId: (id: number) => void;
 }
 
-export default function GalleryList({images, onSelectId}: IProps) {
+export default function GalleryList({images, onSelectId}: GalleryListProps) {
     if (!images) {
         return "No images arrived"
     }
@@ -15,7 +15,7 @@ export default function GalleryList({images, onSelectId}: IProps) {
         <ul className="gallery">
             {images.map(image => (
                 <li key={image.id} onClick={() => onSelectId(image.id)}>
-                    <img src={image.thumbnail_path} />
+                    <img src={image.thumbnail_path} alt={image.filename} />
                 </li>
             ))}
         </ul>

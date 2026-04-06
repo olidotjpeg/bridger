@@ -5,6 +5,9 @@ cmd/main/
 # Database
 *.db
 
+# thumbs
+thumbs/
+
 # IDE / editor
 .vscode/
 .idea/

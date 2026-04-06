@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -79,12 +80,16 @@ func getFullResolutionImage(db *sql.DB) gin.HandlerFunc {
 func startNewScan(db *sql.DB, state *scanner.ScanState, cfg Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		if state.IsRunning() {
+		if !state.TryStart() {
 			c.JSON(http.StatusConflict, gin.H{"message": "There is already an active scan running"})
 			return
 		}
 
-		go scanner.RunScan(cfg.WalkDir, cfg.ThumbDir, db, state)
+		go func() {
+			if err := scanner.RunScan(cfg.WalkDir, cfg.ThumbDir, db, state); err != nil {
+				log.Printf("scan error: %v", err)
+			}
+		}()
 		c.JSON(http.StatusAccepted, gin.H{"message": "Scan started"})
 	}
 }

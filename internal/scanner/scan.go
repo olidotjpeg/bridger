@@ -3,7 +3,6 @@ package scanner
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/olidotjpeg/bridger/internal/db"
@@ -44,20 +43,34 @@ func (s *ScanState) IsRunning() bool {
 	return s.Running
 }
 
-func RunScan(walkDir string, thumbDir string, database *sql.DB, state *ScanState) {
+// TryStart atomically checks and sets Running to true.
+// Returns false if a scan is already in progress.
+func (s *ScanState) TryStart() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Running {
+		return false
+	}
+	s.Running = true
+	return true
+}
+
+func RunScan(walkDir string, thumbDir string, database *sql.DB, state *ScanState) error {
 	var inserted, updated, skipped, errors int
 
 	fmt.Printf("Scanning %s...\n", walkDir)
 
 	results, err := walk.WalkDirectory(walkDir, thumbDir)
 	if err != nil {
-		log.Fatal(err)
+		state.mu.Lock()
+		state.Running = false
+		state.mu.Unlock()
+		return err
 	}
 
 	fmt.Printf("Found %d files\n", len(results))
 
 	state.mu.Lock()
-	state.Running = true
 	state.Total = len(results)
 	state.Processed = 0
 	state.Errors = 0
@@ -103,4 +116,5 @@ func RunScan(walkDir string, thumbDir string, database *sql.DB, state *ScanState
 	fmt.Printf("  Skipped:  %d\n", skipped)
 	fmt.Printf("  Errors:   %d\n", errors)
 	fmt.Println("Done.")
+	return nil
 }

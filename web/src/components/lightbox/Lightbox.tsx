@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import type { Image } from "../../App";
+import type { Image } from "../../api/images";
 import "./Lightbox.css";
 
-interface IProps {
+interface LightboxProps {
   images: Image[];
   selectedId: number | null;
   onClose: () => void;
@@ -14,8 +14,9 @@ export default function LightBox({
   selectedId,
   onClose,
   onNavigate,
-}: IProps) {
+}: LightboxProps) {
   const currentIndex = images.findIndex((img) => img.id === selectedId);
+  const currentImage = images[currentIndex]
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -31,19 +32,19 @@ export default function LightBox({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedId, onClose, onNavigate]);
+  }, [selectedId, onClose, onNavigate, images, currentIndex]);
+
+  if (!currentImage) return null
 
   return (
     <div className="lightbox">
       <div className="lightbox-wrapper">
-        <img src={`api/images/${selectedId}/full`} />
+        <img src={`/api/images/${selectedId}/full`} alt={currentImage.filename} />
         <div className="meta">
-          <p>Capture date {images[currentIndex].capture_date}</p>
-          <p>
-            W/H {images[currentIndex].width} / {images[currentIndex].height}
-          </p>
-          <p>Name {images[currentIndex].filename}</p>
-          <p>MimeType {images[currentIndex].mime_type}</p>
+          <p>Capture date {currentImage.capture_date}</p>
+          <p>W/H {currentImage.width} / {currentImage.height}</p>
+          <p>Name {currentImage.filename}</p>
+          <p>MimeType {currentImage.mime_type}</p>
         </div>
       </div>
     </div>

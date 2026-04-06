@@ -30,11 +30,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = db.RunMigrations(database, "./sql/migrations")
+	if err := db.RunMigrations(database, "./sql/migrations"); err != nil {
+		log.Fatal(err)
+	}
 
 	state := &scanner.ScanState{}
 
-	go scanner.RunScan(walkDir, thumbDir, database, state)
+	go func() {
+		if err := scanner.RunScan(walkDir, thumbDir, database, state); err != nil {
+			log.Printf("scan error: %v", err)
+		}
+	}()
 
 	router := api.SetupRouter(database, state, api.Config{
 		WalkDir:  walkDir,
@@ -42,10 +48,6 @@ func main() {
 	})
 
 	router.Static("/thumbs", thumbDir)
-
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	router.Run()
 }

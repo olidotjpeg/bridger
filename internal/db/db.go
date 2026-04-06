@@ -91,7 +91,9 @@ func GetImagesWithCount(db *sql.DB, limit, offset int) ([]Image, int, error) {
 
 	for rows.Next() {
 		var img Image
-		rows.Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath)
+		if err := rows.Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath); err != nil {
+			return nil, 0, err
+		}
 		images = append(images, img)
 	}
 
