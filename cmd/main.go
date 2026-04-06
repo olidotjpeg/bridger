@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"log"
 	"os"
@@ -12,16 +11,12 @@ import (
 	"github.com/olidotjpeg/bridger/internal/scanner"
 )
 
-//go:embed web/dist
-var staticFiles embed.FS
-
 func main() {
 	walkDir, dbPath, thumbDir := setupCLIFlags()
 	vips.Startup(nil)
 	defer vips.Shutdown()
 
 	database, err := db.Database(dbPath)
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,6 +43,7 @@ func main() {
 	})
 
 	router.Static("/thumbs", thumbDir)
+	serveStaticFiles(router)
 
 	router.Run()
 }
