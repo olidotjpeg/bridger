@@ -6,6 +6,27 @@ info:
 http:
   method: GET
   url: http://localhost:8080/api/images
+  params:
+    - name: page
+      value: "1"
+      type: query
+      enabled: true
+    - name: limit
+      value: "50"
+      type: query
+      enabled: true
+    - name: sort
+      value: capture_date
+      type: query
+      enabled: true
+    - name: order
+      value: desc
+      type: query
+      enabled: true
+    - name: rating
+      value: "1"
+      type: query
+      enabled: false
   auth: inherit
 
 settings:

@@ -1,0 +1,105 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0 0 24px;
+}
+
+.sidebar-logo {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 20px 18px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.sidebar-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.sidebar-select {
+  width: 100%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 6px 10px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23525252'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+
+.sidebar-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sidebar-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.sidebar-toggle button {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sidebar-toggle button:hover {
+  color: var(--text);
+  border-color: #3a3a3a;
+}
+
+.sidebar-toggle button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.sidebar-rating {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sidebar-rating button {
+  flex: 1;
+  min-width: 36px;
+  padding: 5px 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sidebar-rating button:hover {
+  color: var(--text);
+  border-color: #3a3a3a;
+}
+
+.sidebar-rating button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}

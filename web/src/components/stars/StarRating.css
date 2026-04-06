@@ -1,0 +1,28 @@
+.star-rating {
+  display: flex;
+  gap: 2px;
+}
+
+.star {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  line-height: 1;
+  padding: 2px 3px;
+  transition: color 0.1s, transform 0.1s;
+}
+
+.star:hover {
+  transform: scale(1.2);
+}
+
+.star.filled {
+  color: var(--accent);
+}
+
+.star:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}

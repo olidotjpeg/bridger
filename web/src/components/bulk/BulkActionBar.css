@@ -1,0 +1,81 @@
+.bulk-bar {
+  position: fixed;
+  bottom: 0;
+  left: 210px;
+  right: 0;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  z-index: 50;
+  gap: 16px;
+}
+
+.bulk-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bulk-count {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.bulk-clear {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.bulk-clear:hover {
+  color: var(--text);
+  border-color: #3a3a3a;
+}
+
+.bulk-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bulk-label {
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.bulk-star {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bulk-star:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.bulk-reject {
+  background: none;
+  border: 1px solid #5a2020;
+  border-radius: 4px;
+  color: #c0392b;
+  padding: 4px 12px;
+  margin-left: 8px;
+  transition: background 0.15s;
+}
+
+.bulk-reject:hover {
+  background: rgba(192, 57, 43, 0.15);
+}

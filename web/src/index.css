@@ -1,0 +1,32 @@
+:root {
+  --bg: #0c0c0c;
+  --surface: #141414;
+  --surface-raised: #1c1c1c;
+  --border: #262626;
+  --text: #c8c8c8;
+  --text-muted: #525252;
+  --accent: #9055C5;
+  --accent-hover: #A46ED6;
+  --color-overlay: rgba(0, 0, 0, 0.94);
+  --color-text-light: #e8e8e8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}

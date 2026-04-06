@@ -1,0 +1,26 @@
+info:
+  name: Patch Image
+  type: http
+  seq: 3
+
+http:
+  method: PATCH
+  url: http://localhost:8080/api/images/:id
+  params:
+    - name: id
+      value: "1"
+      type: path
+  body:
+    mode: json
+    json: |
+      {
+        "rating": 4,
+        "tags": [1, 2]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

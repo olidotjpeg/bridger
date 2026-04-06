@@ -533,7 +533,7 @@ Implement keyboard shortcuts for browsing. These are core to the culling workflo
 
 ## Tasks
 
-### [ ] 1. Filtering and sorting (full-stack)
+### [X] 1. Filtering and sorting (full-stack)
 
 Update the API to accept sort/filter params and add a sidebar to the UI.
 
@@ -551,7 +551,7 @@ Update the API to accept sort/filter params and add a sidebar to the UI.
 
 ---
 
-### [ ] 2. `PATCH /api/images/:id` — update rating and tags
+### [X] 2. `PATCH /api/images/:id` — update rating and tags
 
 Add the write endpoint to the Go API.
 
@@ -570,7 +570,7 @@ Add the write endpoint to the Go API.
 
 ---
 
-### [ ] 2. `POST /api/tags` — create a new tag
+### [X] 2. `POST /api/tags` — create a new tag
 
 **Request body:**
 ```json
@@ -583,7 +583,7 @@ Returns the created tag with its `id`. Returns `409 Conflict` if the name alread
 
 ---
 
-### [ ] 3. Star rating UI
+### [X] 3. Star rating UI
 
 Add interactive star rating to the detail view and grid.
 
@@ -598,7 +598,7 @@ Add interactive star rating to the detail view and grid.
 
 ---
 
-### [ ] 4. Tag management UI
+### [X] 4. Tag management UI
 
 Allow adding and removing tags from images in the detail view.
 
@@ -663,3 +663,80 @@ Show live scan progress in the React sidebar using the `GET /api/scan/status` en
 4. Add a manual "Scan" button that calls `POST /api/scan`
 
 **Done when:** The sidebar shows live progress during a scan and updates automatically when new files are detected.
+
+---
+
+# Phase 7 – UI Improvements
+
+> Goal: make the app feel like a proper culling tool with a dedicated cull mode, richer image metadata, and smarter date-based navigation.
+
+---
+
+## Tasks
+
+### [ ] 1. Cull mode
+
+A distraction-free single-image view designed for rapid picking. Accessible from the gallery via a toolbar toggle.
+
+**Behaviour:**
+- Fills the full main area with one image at a time (no sidebar overlap)
+- Filmstrip of thumbnails along the bottom for context
+- Keyboard shortcuts: `←` / `→` to advance, `1`–`5` to rate, `x` to reject, `Escape` to return to grid
+
+**Steps:**
+
+1. Add a `mode` state to `App.tsx`: `'grid' | 'cull'`
+2. Add a toggle button in the toolbar (or sidebar) to switch modes
+3. Create `internal/components/cull/CullView.tsx` — full-height image, star rating, and a scrollable filmstrip at the bottom
+4. Reuse `StarRating` and the existing `patchImage` mutation
+5. Keyboard handler: same as lightbox but navigates through the full current query result rather than just the current page
+
+**Done when:** The user can enter cull mode, flip through images with arrow keys, rate them, and return to the grid with all changes reflected.
+
+---
+
+### [ ] 2. EXIF detail panel
+
+Surface camera metadata in the lightbox so the user can make informed culling decisions (sharpness, exposure settings).
+
+**API changes:**
+- Extend the `images` schema with `camera_model`, `iso`, `aperture`, `shutter_speed`, `focal_length` columns
+- Populate them during EXIF extraction in `internal/exif/exif.go`
+- Return them from `GET /api/images` and `GET /api/images/:id`
+
+**UI changes:**
+- Add a collapsible "EXIF" panel below the tag editor in the lightbox
+- Display: camera model, lens, focal length, aperture (f/2.8), shutter speed (1/500s), ISO
+
+**Steps:**
+
+1. Add migration to add the new columns (nullable)
+2. Update `ExtractEXIF` to extract and return the new fields
+3. Update `UpsertImagePath` and `Image` struct to include them
+4. Add the EXIF panel component to the lightbox
+
+**Done when:** Opening an image in the lightbox shows its camera settings beneath the tag editor.
+
+---
+
+### [ ] 3. Date grouping
+
+Replace flat pagination with date-grouped sections so shoots are easy to navigate.
+
+**API changes:**
+- Add a `GET /api/images/dates` endpoint that returns a list of distinct dates (or months) with image counts
+- Or extend `GET /api/images` to support a `group_by=date` param that returns images nested under date headers
+
+**UI changes:**
+- Replace the flat `<ul class="gallery">` with sections: a sticky date header followed by that day's thumbnails
+- Keep infinite scroll or pagination within each group
+- Date format: `Saturday 5 April 2025 — 42 photos`
+
+**Steps:**
+
+1. Add `GET /api/dates` to the API returning `[{ date: "2025-04-05", count: 42 }]`
+2. In the frontend, fetch dates first, then fetch images per date on demand
+3. Render each date as a labelled section with its own grid
+4. Preserve existing filter and sort state within each group
+
+**Done when:** The gallery is grouped by shoot date with sticky headers and image counts, replacing flat pagination.
