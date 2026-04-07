@@ -8,6 +8,9 @@ cmd/main/
 # thumbs
 thumbs/
 
+# Test data
+internal/walker/TestData
+
 # IDE / editor
 .vscode/
 .idea/
