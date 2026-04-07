@@ -7,6 +7,7 @@ import (
 
 	"github.com/olidotjpeg/bridger/internal/db"
 	"github.com/olidotjpeg/bridger/internal/exif"
+	"github.com/olidotjpeg/bridger/internal/raw"
 	"github.com/olidotjpeg/bridger/internal/thumbs"
 	walk "github.com/olidotjpeg/bridger/internal/walker"
 )
@@ -85,7 +86,14 @@ func RunScan(walkDir string, thumbDir string, database *sql.DB, state *ScanState
 
 		thumbPath, _ := thumbs.GenerateThumbnail(result.Path, thumbDir)
 
-		action, err := db.UpsertImagePath(database, result, thumbPath)
+		previewPath := ""
+		if raw.IsRaw(result.MimeType) {
+			if p, err := raw.GeneratePreview(result.Path, thumbDir); err == nil {
+				previewPath = p
+			}
+		}
+
+		action, err := db.UpsertImagePath(database, result, thumbPath, previewPath)
 		if err != nil {
 			errors++
 			state.mu.Lock()

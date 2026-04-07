@@ -21,6 +21,7 @@ type Image struct {
 	Rating        int    `json:"rating"`
 	MimeType      string `json:"mime_type"`
 	ThumbnailPath string `json:"thumbnail_path"`
+	PreviewPath   string `json:"preview_path,omitempty"`
 }
 
 type Tag struct {
@@ -106,7 +107,7 @@ func Database(dbPath string) (*sql.DB, error) {
 	return db, err
 }
 
-func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath string) (string, error) {
+func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath string) (string, error) {
 	var existingSize int64
 	err := db.QueryRow("SELECT file_size FROM images WHERE file_path = ?", filePath.Path).Scan(&existingSize)
 
@@ -125,16 +126,17 @@ func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath string) (stri
 	}
 
 	_, err = db.Exec(`
-	INSERT INTO images (file_path, filename, file_size, mime_type, thumbnail_path, capture_date, width, height, index_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO images (file_path, filename, file_size, mime_type, thumbnail_path, preview_path, capture_date, width, height, index_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(file_path) DO UPDATE SET
 			file_size      = excluded.file_size,
 			thumbnail_path = excluded.thumbnail_path,
+			preview_path   = excluded.preview_path,
 			capture_date   = excluded.capture_date,
 			width          = excluded.width,
 			height         = excluded.height,
 			index_at       = excluded.index_at
-	`, filePath.Path, filePath.FileName, filePath.Size, filePath.MimeType, thumbPath, filePath.CaptureDate, filePath.Width, filePath.Height, time.Now().UTC())
+	`, filePath.Path, filePath.FileName, filePath.Size, filePath.MimeType, thumbPath, previewPath, filePath.CaptureDate, filePath.Width, filePath.Height, time.Now().UTC())
 
 	if err != nil {
 		log.Printf("error inserting %s: %v", filePath.Path, err)
@@ -161,7 +163,7 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 	}
 
 	query := fmt.Sprintf(
-		"SELECT id, file_path, filename, capture_date, width, height, rating, mime_type, thumbnail_path FROM images %s ORDER BY %s %s NULLS LAST LIMIT ? OFFSET ?",
+		"SELECT id, file_path, filename, capture_date, width, height, rating, mime_type, thumbnail_path, COALESCE(preview_path, '') FROM images %s ORDER BY %s %s NULLS LAST LIMIT ? OFFSET ?",
 		where, q.Sort, q.Order,
 	)
 	rows, err := db.Query(query, append(args, q.Limit, q.Offset)...)
@@ -172,7 +174,7 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 
 	for rows.Next() {
 		var img Image
-		if err := rows.Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath); err != nil {
+		if err := rows.Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath, &img.PreviewPath); err != nil {
 			return nil, 0, err
 		}
 		images = append(images, img)
@@ -181,10 +183,9 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 	return images, count, nil
 }
 
-func GetImagePath(db *sql.DB, id string) (string, string, error) {
-	var filePath, mimeType string
-	err := db.QueryRow("SELECT file_path, mime_type FROM images WHERE id = ?", id).Scan(&filePath, &mimeType)
-	return filePath, mimeType, err
+func GetImagePath(db *sql.DB, id string) (filePath, mimeType, previewPath string, err error) {
+	err = db.QueryRow("SELECT file_path, mime_type, COALESCE(preview_path, '') FROM images WHERE id = ?", id).Scan(&filePath, &mimeType, &previewPath)
+	return
 }
 
 type PatchImageInput struct {

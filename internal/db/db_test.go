@@ -37,7 +37,7 @@ func TestUpsertImagePath_Insert(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	if _, err := UpsertImagePath(db, file, ""); err != nil {
+	if _, err := UpsertImagePath(db, file, "", ""); err != nil {
 		t.Fatalf("unexpect error: %v", err)
 	}
 
@@ -58,8 +58,8 @@ func TestUpsertImagePath_SkipUnchanged(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	UpsertImagePath(db, file, "")
-	if _, err := UpsertImagePath(db, file, ""); err != nil {
+	UpsertImagePath(db, file, "", "")
+	if _, err := UpsertImagePath(db, file, "", ""); err != nil {
 		t.Fatalf("unexpected error on second upsert: %v", err)
 	}
 
@@ -80,10 +80,10 @@ func TestUpsertImagePath_UpdateChanged(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	UpsertImagePath(db, file, "")
+	UpsertImagePath(db, file, "", "")
 
 	file.Size = 2000
-	if _, err := UpsertImagePath(db, file, ""); err != nil {
+	if _, err := UpsertImagePath(db, file, "", ""); err != nil {
 		t.Fatalf("unexpected error on update: %v", err)
 	}
 
@@ -102,7 +102,7 @@ func seedImage(t *testing.T, database *sql.DB, path string) string {
 		Size:     1000,
 		MimeType: "image/jpeg",
 	}
-	if _, err := UpsertImagePath(database, file, ""); err != nil {
+	if _, err := UpsertImagePath(database, file, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	var id string
@@ -120,11 +120,11 @@ func TestUpsertImagePath_PreservesRating(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	UpsertImagePath(db, file, "")
+	UpsertImagePath(db, file, "", "")
 	db.Exec("UPDATE images SET rating = 5 WHERE file_path = ?", file.Path)
 
 	file.Size = 2000
-	UpsertImagePath(db, file, "")
+	UpsertImagePath(db, file, "", "")
 
 	var rating int
 	db.QueryRow("SELECT rating FROM images WHERE file_path = ?", file.Path).Scan(&rating)

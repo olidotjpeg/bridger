@@ -155,7 +155,7 @@ func seedRouterImage(t *testing.T, database *sql.DB, path string) string {
 		Size:     1000,
 		MimeType: "image/jpeg",
 	}
-	if _, err := db.UpsertImagePath(database, file, ""); err != nil {
+	if _, err := db.UpsertImagePath(database, file, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	var id string

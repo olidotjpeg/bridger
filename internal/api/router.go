@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	database "github.com/olidotjpeg/bridger/internal/db"
+	"github.com/olidotjpeg/bridger/internal/raw"
 	"github.com/olidotjpeg/bridger/internal/scanner"
 )
 
@@ -98,9 +99,18 @@ func getFullResolutionImage(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 
-		filePath, mimeType, err := database.GetImagePath(db, id)
-
+		filePath, mimeType, previewPath, err := database.GetImagePath(db, id)
 		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		if raw.IsRaw(mimeType) {
+			if previewPath != "" {
+				c.Header("Content-Type", "image/jpeg")
+				c.File(previewPath)
+				return
+			}
 			c.Status(http.StatusNotFound)
 			return
 		}
