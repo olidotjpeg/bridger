@@ -2,13 +2,12 @@ package db
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
-	sqlite3 "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	walk "github.com/olidotjpeg/bridger/internal/walker"
 )
 
@@ -84,8 +83,7 @@ func CreateTag(db *sql.DB, name string) (Tag, error) {
 }
 
 func IsConflict(err error) bool {
-	var sqliteErr sqlite3.Error
-	return errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
 type ImageQuery struct {
@@ -95,7 +93,7 @@ type ImageQuery struct {
 }
 
 func Database(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 
 	if err != nil {
 		return db, err

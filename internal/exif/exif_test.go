@@ -1,24 +1,34 @@
 package exif
 
 import (
+	"os"
 	"testing"
 )
 
 const (
-	testJPEG = "../../internal/walker/TestData/2024-12/VRChat_2024-12-06_20-52-55.177_1920x1080.png"
-	testCR2  = "../../internal/walker/TestData/RAW_CANON_EOS_1DX.CR2"
-	testRAF  = "../../internal/walker/TestData/RAW_FUJI_X-E1.RAF"
+	testCR2 = "../../internal/walker/TestData/RAW_CANON_EOS_1DX.CR2"
+	testRAF = "../../internal/walker/TestData/RAW_FUJI_X-E1.RAF"
 )
 
 func TestExtractEXIF_NoEXIF(t *testing.T) {
-	// VRChat PNGs have no EXIF data
-	_, err := ExtractEXIF(testJPEG)
+	// A plain text file has no EXIF data.
+	f, err := os.CreateTemp(t.TempDir(), "noexif*.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("not a real jpeg")
+	f.Close()
+
+	_, err = ExtractEXIF(f.Name())
 	if err == nil {
 		t.Error("expected error for file without EXIF, got nil")
 	}
 }
 
 func TestExtractEXIF_CR2(t *testing.T) {
+	if _, err := os.Stat(testCR2); err != nil {
+		t.Skip("test data not available: " + testCR2)
+	}
 	data, err := ExtractEXIF(testCR2)
 	if err != nil {
 		t.Fatalf("unexpected error extracting EXIF from CR2: %v", err)
@@ -29,6 +39,9 @@ func TestExtractEXIF_CR2(t *testing.T) {
 }
 
 func TestExtractEXIF_RAF(t *testing.T) {
+	if _, err := os.Stat(testRAF); err != nil {
+		t.Skip("test data not available: " + testRAF)
+	}
 	data, err := ExtractEXIF(testRAF)
 	if err != nil {
 		t.Fatalf("unexpected error extracting EXIF from RAF: %v", err)

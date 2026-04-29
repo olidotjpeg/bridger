@@ -1,7 +1,6 @@
 package walk
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,26 +32,28 @@ func TestHasExtension(t *testing.T) {
 }
 
 func TestWalkDirectory(t *testing.T) {
-	paths, err := WalkDirectory("./TestData", "")
+	root := t.TempDir()
+
+	supported := []string{"photo.jpg", "image.png", "shot.cr2"}
+	unsupported := []string{"clip.mp4", "doc.txt"}
+
+	for _, name := range append(supported, unsupported...) {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	paths, err := WalkDirectory(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	extensions := []string{".png", ".jpg", ".jpeg", ".cr2", ".nef", ".arw", ".raf"}
-	expected := 0
-	filepath.WalkDir("./TestData", func(path string, d fs.DirEntry, _ error) error {
-		if !d.IsDir() && hasExtension(path, extensions) {
-			expected++
-		}
-		return nil
-	})
-
-	if len(paths) != expected {
-		t.Errorf("got %d paths, want %d", len(paths), expected)
+	if len(paths) != len(supported) {
+		t.Errorf("got %d paths, want %d", len(paths), len(supported))
 	}
 
 	for _, p := range paths {
-		if strings.ToLower(p.MimeType) == "video/mp4" {
+		if strings.ToLower(filepath.Ext(p.Path)) == ".mp4" {
 			t.Errorf("unexpected .mp4 file in results: %s", p.Path)
 		}
 		if p.FileName == "" {

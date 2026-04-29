@@ -12,7 +12,7 @@ import (
 func setupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,5 +444,56 @@ func TestGetImageTags_WithData(t *testing.T) {
 	// Alphabetical: Landscape, Wedding
 	if tags[0].Name != "Landscape" {
 		t.Errorf("expected Landscape first, got %s", tags[0].Name)
+	}
+}
+
+// --- PruneStaleEntries ---
+
+func TestPruneStaleEntries_RemovesStale(t *testing.T) {
+	db := setupTestDB(t)
+	seedImage(t, db, "/photos/keep.jpg")
+	seedImage(t, db, "/photos/gone.jpg")
+
+	found := map[string]bool{"/photos/keep.jpg": true}
+	pruned, err := PruneStaleEntries(db, []string{"/photos"}, found)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 1 {
+		t.Errorf("expected 1 pruned, got %d", pruned)
+	}
+
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM images").Scan(&count)
+	if count != 1 {
+		t.Errorf("expected 1 image remaining, got %d", count)
+	}
+}
+
+func TestPruneStaleEntries_KeepsAll(t *testing.T) {
+	db := setupTestDB(t)
+	seedImage(t, db, "/photos/a.jpg")
+	seedImage(t, db, "/photos/b.jpg")
+
+	found := map[string]bool{"/photos/a.jpg": true, "/photos/b.jpg": true}
+	pruned, err := PruneStaleEntries(db, []string{"/photos"}, found)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 0 {
+		t.Errorf("expected 0 pruned, got %d", pruned)
+	}
+}
+
+func TestPruneStaleEntries_NoDirs(t *testing.T) {
+	db := setupTestDB(t)
+	seedImage(t, db, "/photos/a.jpg")
+
+	pruned, err := PruneStaleEntries(db, nil, map[string]bool{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pruned != 0 {
+		t.Errorf("expected 0 pruned with no dirs, got %d", pruned)
 	}
 }

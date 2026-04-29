@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/olidotjpeg/bridger/internal/api"
 	"github.com/olidotjpeg/bridger/internal/config"
 	"github.com/olidotjpeg/bridger/internal/db"
@@ -37,9 +36,6 @@ func main() {
 	cfg.ThumbsPath = *thumbsDir
 
 	needsSetup := config.NeedsSetup(cfg) && *dir == ""
-
-	vips.Startup(nil)
-	defer vips.Shutdown()
 
 	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0700); err != nil {
 		log.Fatal(err)

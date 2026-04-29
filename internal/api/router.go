@@ -206,6 +206,10 @@ func patchImagesWithRatingOrTag(db *sql.DB, cfg Config) gin.HandlerFunc {
 		}
 
 		img, err := database.PatchImagesWithRatingOrTag(db, id, input)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"message": "image not found"})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 			return

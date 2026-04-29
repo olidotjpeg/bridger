@@ -102,13 +102,15 @@ func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanSt
 			result.Height = exifData.Height
 		}
 
-		thumbPath, _ := thumbs.GenerateThumbnail(result.Path, thumbDir)
-
 		previewPath := ""
+		thumbPath := ""
 		if raw.IsRaw(result.MimeType) {
 			if p, err := raw.GeneratePreview(result.Path, thumbDir); err == nil {
 				previewPath = p
+				thumbPath, _ = thumbs.GenerateThumbnail(p, thumbDir)
 			}
+		} else {
+			thumbPath, _ = thumbs.GenerateThumbnail(result.Path, thumbDir)
 		}
 
 		action, err := db.UpsertImagePath(database, result, thumbPath, previewPath)

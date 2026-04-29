@@ -17,10 +17,10 @@ just test                            # Run all Go tests
 
 ### Go Backend
 ```bash
-go run -tags dev ./cmd/main.go --dir /path/to/photos
-go test -tags dev ./...                     # All tests
-go test -v -tags dev ./internal/db          # Single package, verbose
-go test -run TestFunctionName -tags dev ./... # Single test
+CGO_ENABLED=0 go run -tags dev ./cmd/main.go --dir /path/to/photos
+CGO_ENABLED=0 go test -tags dev ./...                     # All tests
+CGO_ENABLED=0 go test -v -tags dev ./internal/db          # Single package, verbose
+CGO_ENABLED=0 go test -run TestFunctionName -tags dev ./... # Single test
 ```
 
 ### Frontend
@@ -47,8 +47,8 @@ The backend is a single Go binary that does two things concurrently: serves an H
 - **`scanner/`** — Orchestrates directory traversal, EXIF extraction, thumbnail generation, and DB upserts; runs in background goroutine; exposes scan progress
 - **`walker/`** — Filesystem traversal, filters to supported extensions (JPEG, PNG, RAW formats)
 - **`watcher/`** — `fsnotify`-based watcher that triggers re-index when files are added/modified
-- **`thumbs/`** — Thumbnail generation via `govips` (wraps libvips C library)
-- **`raw/`** — RAW preview extraction: tries `govips`/libraw first, falls back to `exiftool` CLI
+- **`thumbs/`** — Thumbnail generation via `disintegration/imaging` (pure Go, no CGO)
+- **`raw/`** — RAW preview extraction: pure Go, extracts the embedded JPEG preview from the RAW binary
 - **`exif/`** — EXIF metadata extraction via `rwcarlsen/goexif`
 
 ### Frontend (`web/src/`)
@@ -66,10 +66,12 @@ Migrations live in `sql/migrations/` as numbered up/down SQL files. The `db` pac
 
 ## Critical Dependencies
 
-- **libvips** — required at build and runtime (`brew install vips` on macOS); govips wraps it via CGO
-- **C compiler** — required by `go-sqlite3` (Xcode Command Line Tools on macOS)
-- **exiftool** — optional, used as fallback for RAW preview extraction
-- `CGO_ENABLED=1` is required for both sqlite3 and vips bindings
+No native dependencies required. The binary is pure Go with `CGO_ENABLED=0`:
+- **`modernc.org/sqlite`** — pure Go SQLite port, no C compiler needed
+- **`disintegration/imaging`** — pure Go image resizing for thumbnails
+- RAW previews extracted from the embedded JPEG inside each RAW file (pure Go)
+
+Cross-compilation works out of the box: `GOOS=windows GOARCH=amd64 go build ./cmd`
 
 ## Supported Image Formats
 

@@ -3,10 +3,12 @@ package thumbs
 import (
 	"crypto/md5"
 	"fmt"
+	"image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 
-	"github.com/davidbyttow/govips/v2/vips"
+	"github.com/disintegration/imaging"
 )
 
 func GenerateThumbnail(srcPath string, thumbDir string) (string, error) {
@@ -17,21 +19,22 @@ func GenerateThumbnail(srcPath string, thumbDir string) (string, error) {
 		return thumbPath, nil
 	}
 
-	image, err := vips.NewThumbnailFromFile(srcPath, 400, 0, vips.InterestingNone)
-
+	src, err := imaging.Open(srcPath, imaging.AutoOrientation(true))
 	if err != nil {
 		return "", err
 	}
 
-	defer image.Close()
+	thumb := imaging.Fit(src, 400, 400, imaging.Lanczos)
 
-	ep := vips.NewJpegExportParams()
-	buf, _, err := image.ExportJpeg(ep)
+	out, err := os.Create(thumbPath)
 	if err != nil {
 		return "", err
 	}
+	defer out.Close()
 
-	if err := os.WriteFile(thumbPath, buf, 0644); err != nil {
+	if err := jpeg.Encode(out, thumb, &jpeg.Options{Quality: 85}); err != nil {
+		out.Close()
+		os.Remove(thumbPath)
 		return "", err
 	}
 

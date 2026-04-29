@@ -1,13 +1,12 @@
 package raw
 
 import (
+	"bytes"
 	"crypto/md5"
 	"fmt"
+	"image/jpeg"
 	"os"
-	"os/exec"
 	"path/filepath"
-
-	"github.com/davidbyttow/govips/v2/vips"
 )
 
 var mimeTypes = map[string]bool{
@@ -22,9 +21,8 @@ func IsRaw(mimeType string) bool {
 	return mimeTypes[mimeType]
 }
 
-// GeneratePreview converts a RAW file to a full-resolution JPEG and saves it to
-// previewDir. Returns the path to the saved JPEG. Skips generation if the file
-// already exists.
+// GeneratePreview extracts the embedded JPEG preview from a RAW file and saves
+// it to previewDir. Returns the path to the saved JPEG. Skips if already cached.
 func GeneratePreview(srcPath, previewDir string) (string, error) {
 	hash := fmt.Sprintf("%x", md5.Sum([]byte(srcPath)))
 	previewPath := filepath.Join(previewDir, hash+"_preview.jpg")
@@ -33,12 +31,9 @@ func GeneratePreview(srcPath, previewDir string) (string, error) {
 		return previewPath, nil
 	}
 
-	buf, err := toJPEGVips(srcPath)
+	buf, err := extractEmbeddedJPEG(srcPath)
 	if err != nil {
-		buf, err = toJPEGExiftool(srcPath)
-		if err != nil {
-			return "", err
-		}
+		return "", err
 	}
 
 	if err := os.WriteFile(previewPath, buf, 0644); err != nil {
@@ -48,28 +43,52 @@ func GeneratePreview(srcPath, previewDir string) (string, error) {
 	return previewPath, nil
 }
 
-func toJPEGVips(path string) ([]byte, error) {
-	// NewThumbnailFromFile uses the libraw pipeline which handles RAF/NEF/CR2.
-	// 10000px cap is above any camera sensor so this is effectively full resolution.
-	img, err := vips.NewThumbnailFromFile(path, 10000, 0, vips.InterestingNone)
+// extractEmbeddedJPEG finds the highest-resolution JPEG embedded in a RAW file.
+// All common RAW formats (CR2, NEF, ARW, RAF) contain embedded camera-generated
+// JPEG previews. We use jpeg.Decode for exact boundary detection and pick the
+// candidate with the largest pixel area (not byte size, since an EXIF thumbnail
+// inside the large preview JPEG can fool byte-count heuristics).
+func extractEmbeddedJPEG(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer img.Close()
 
-	ep := vips.NewJpegExportParams()
-	ep.Quality = 95
-	buf, _, err := img.ExportJpeg(ep)
-	return buf, err
-}
+	soiMarker := []byte{0xFF, 0xD8, 0xFF}
 
-func toJPEGExiftool(path string) ([]byte, error) {
-	// LargePreviewImage is the highest quality embedded preview in most RAW files
-	for _, tag := range []string{"-LargePreviewImage", "-JpgFromRaw", "-PreviewImage"} {
-		out, err := exec.Command("exiftool", "-b", tag, path).Output()
-		if err == nil && len(out) > 0 {
-			return out, nil
+	var bestData []byte
+	bestPixels := 0
+
+	pos := 0
+	for pos < len(data) {
+		idx := bytes.Index(data[pos:], soiMarker)
+		if idx < 0 {
+			break
 		}
+		soi := pos + idx
+
+		// Decode the JPEG starting at this SOI. jpeg.Decode advances the reader
+		// exactly to the EOI, so r.Len() tells us how many bytes remain after the JPEG.
+		r := bytes.NewReader(data[soi:])
+		img, decErr := jpeg.Decode(r)
+		if decErr == nil {
+			b := img.Bounds()
+			pixels := b.Dx() * b.Dy()
+			if pixels > bestPixels {
+				consumed := len(data[soi:]) - r.Len()
+				bestData = data[soi : soi+consumed]
+				bestPixels = pixels
+			}
+		}
+
+		pos = soi + 1
 	}
-	return nil, fmt.Errorf("no JPEG preview found in %s", path)
+
+	if len(bestData) == 0 {
+		return nil, fmt.Errorf("no embedded JPEG preview found in %s", path)
+	}
+
+	out := make([]byte, len(bestData))
+	copy(out, bestData)
+	return out, nil
 }

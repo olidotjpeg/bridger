@@ -26,7 +26,7 @@ func init() {
 func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 	t.Helper()
 
-	database, err := sql.Open("sqlite3", ":memory:")
+	database, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,5 +554,160 @@ func TestGetImages_InvalidOrderFallback(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 with safe fallback order, got %d", w.Code)
+	}
+}
+
+// --- PATCH /api/images/:id not found ---
+
+func TestPatchImage_NotFound(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PATCH", "/api/images/nonexistent-id", strings.NewReader(`{"rating": 3}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+// --- GET /api/config ---
+
+func TestGetConfig(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/config", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse config response: %v", err)
+	}
+	if _, ok := body["needs_setup"]; !ok {
+		t.Error("expected needs_setup field in response")
+	}
+}
+
+// --- PUT /api/config ---
+
+func TestPutConfig_MissingBody(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PUT", "/api/config", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestPutConfig_InvalidDir(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PUT", "/api/config", strings.NewReader(`{"scan_dirs": ["/nonexistent/path/xyz"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for non-existent dir, got %d", w.Code)
+	}
+}
+
+func TestPutConfig_ValidDir(t *testing.T) {
+	dir := t.TempDir()
+
+	state := &scanner.ScanState{}
+	reconfigCh := make(chan config.Config, 1)
+	cfg := &config.Config{ScanDirs: []string{}, DBPath: ":memory:", ThumbsPath: t.TempDir()}
+
+	database, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { database.Close() })
+
+	_, filename, _, _ := runtime.Caller(0)
+	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
+	if err := db.RunMigrations(database, migrationsPath); err != nil {
+		t.Fatal(err)
+	}
+
+	router := SetupRouter(database, state, Config{
+		ThumbDir:   cfg.ThumbsPath,
+		NeedsSetup: true,
+		CurrentCfg: cfg,
+		ReconfigCh: reconfigCh,
+	})
+
+	body := `{"scan_dirs": ["` + dir + `"]}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("PUT", "/api/config", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Drain the channel so the goroutine doesn't block.
+	<-reconfigCh
+}
+
+// --- GET /api/fs/list ---
+
+func TestListDirectory_Default(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/fs/list", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if _, ok := body["path"]; !ok {
+		t.Error("expected path field in response")
+	}
+	if _, ok := body["entries"]; !ok {
+		t.Error("expected entries field in response")
+	}
+}
+
+func TestListDirectory_SpecificPath(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	dir := t.TempDir()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/fs/list?path="+dir, nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestListDirectory_InvalidPath(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/fs/list?path=/nonexistent/xyz/abc", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
