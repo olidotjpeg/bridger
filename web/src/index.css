@@ -1,14 +1,30 @@
 :root {
-  --bg: #0c0c0c;
-  --surface: #141414;
-  --surface-raised: #1c1c1c;
-  --border: #262626;
+  --bg: #080808;
+  --surface: #0f0f0f;
+  --surface-raised: #161616;
+  --surface-hover: #1e1e1e;
+  --border: #222222;
+  --border-subtle: #181818;
   --text: #c8c8c8;
-  --text-muted: #525252;
-  --accent: #9055C5;
-  --accent-hover: #A46ED6;
-  --color-overlay: rgba(0, 0, 0, 0.94);
-  --color-text-light: #e8e8e8;
+  --text-muted: #484848;
+  --text-dim: #686868;
+  --accent: #8B47D4;
+  --accent-hover: #9f5de0;
+  --accent-dim: rgba(139, 71, 212, 0.1);
+  --accent-glow: rgba(139, 71, 212, 0.22);
+  --star: #C8922A;
+  --star-dim: rgba(200, 146, 42, 0.15);
+  --reject: #991b1b;
+  --reject-text: #f87171;
+  --color-overlay: rgba(4, 4, 4, 0.97);
+  --color-text-light: #eeeeee;
+  --radius-sm: 3px;
+  --radius: 5px;
+  --radius-lg: 8px;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --sidebar-w: 220px;
 }
 
 * {
@@ -20,13 +36,27 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
+  font-weight: 300;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 button {
   cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 400;
 }
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }

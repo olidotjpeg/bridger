@@ -1,0 +1,31 @@
+info:
+  name: Patch Image (tags only)
+  type: http
+  seq: 11
+
+http:
+  method: PATCH
+  url: http://localhost:8080/api/images/:id
+  params:
+    - name: id
+      value: "1"
+      type: path
+  body:
+    mode: json
+    json: |
+      {
+        "tags": []
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+
+tests:
+  - name: returns 200
+    assert: res.status == 200
+  - name: response has an id
+    assert: res.body.id != null

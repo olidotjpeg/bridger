@@ -70,3 +70,21 @@ export async function createTag(name: string): Promise<Tag> {
   if (!res.ok) throw new Error('Failed to create tag')
   return res.json()
 }
+
+export interface ScanStatus {
+  running: boolean
+  total: number
+  processed: number
+  errors: number
+}
+
+export async function fetchScanStatus(): Promise<ScanStatus> {
+  const res = await fetch('/api/scan/status')
+  if (!res.ok) throw new Error('Failed to fetch scan status')
+  return res.json()
+}
+
+export async function triggerScan(): Promise<void> {
+  const res = await fetch('/api/scan', { method: 'POST' })
+  if (!res.ok && res.status !== 409) throw new Error('Failed to start scan')
+}

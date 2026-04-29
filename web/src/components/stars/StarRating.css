@@ -1,28 +1,31 @@
 .star-rating {
   display: flex;
-  gap: 2px;
+  gap: 1px;
 }
 
 .star {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1;
   padding: 2px 3px;
   transition: color 0.1s, transform 0.1s;
+  opacity: 0.4;
 }
 
 .star:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
+  opacity: 1;
 }
 
 .star.filled {
-  color: var(--accent);
+  color: var(--star);
+  opacity: 1;
 }
 
 .star:disabled {
-  opacity: 0.4;
+  opacity: 0.25;
   cursor: not-allowed;
   transform: none;
 }

@@ -44,6 +44,14 @@ func (s *ScanState) IsRunning() bool {
 	return s.Running
 }
 
+// IncrementProcessed increments the Processed counter by one.
+// Safe to call from any goroutine (e.g. the file watcher).
+func (s *ScanState) IncrementProcessed() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Processed++
+}
+
 // TryStart atomically checks and sets Running to true.
 // Returns false if a scan is already in progress.
 func (s *ScanState) TryStart() bool {
@@ -56,17 +64,27 @@ func (s *ScanState) TryStart() bool {
 	return true
 }
 
-func RunScan(walkDir string, thumbDir string, database *sql.DB, state *ScanState) error {
+func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanState) error {
 	var inserted, updated, skipped, errors int
 
-	fmt.Printf("Scanning %s...\n", walkDir)
+	var results []walk.FileInfo
+	var scannedDirs []string
+	for _, dir := range walkDirs {
+		fmt.Printf("Scanning %s...\n", dir)
+		dirResults, err := walk.WalkDirectory(dir, thumbDir)
+		if err != nil {
+			fmt.Printf("  Skipping %s: %v\n", dir, err)
+			continue
+		}
+		results = append(results, dirResults...)
+		scannedDirs = append(scannedDirs, dir)
+	}
 
-	results, err := walk.WalkDirectory(walkDir, thumbDir)
-	if err != nil {
+	if len(walkDirs) == 0 {
 		state.mu.Lock()
 		state.Running = false
 		state.mu.Unlock()
-		return err
+		return nil
 	}
 
 	fmt.Printf("Found %d files\n", len(results))
@@ -113,6 +131,16 @@ func RunScan(walkDir string, thumbDir string, database *sql.DB, state *ScanState
 		state.mu.Lock()
 		state.Processed++
 		state.mu.Unlock()
+	}
+
+	foundPaths := make(map[string]bool, len(results))
+	for _, r := range results {
+		foundPaths[r.Path] = true
+	}
+	if pruned, err := db.PruneStaleEntries(database, scannedDirs, foundPaths); err != nil {
+		fmt.Printf("  Prune error: %v\n", err)
+	} else if pruned > 0 {
+		fmt.Printf("  Pruned:   %d\n", pruned)
 	}
 
 	state.mu.Lock()

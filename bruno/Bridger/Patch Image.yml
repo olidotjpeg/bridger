@@ -24,3 +24,11 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+tests:
+  - name: returns 200
+    assert: res.status == 200
+  - name: rating is updated
+    assert: res.body.rating == 4
+  - name: response has an id
+    assert: res.body.id != null

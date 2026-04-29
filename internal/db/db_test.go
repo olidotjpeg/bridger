@@ -305,3 +305,144 @@ func TestPatchImage_NilRatingSkipsUpdate(t *testing.T) {
 		t.Errorf("expected rating 5 to be preserved, got %d", rating)
 	}
 }
+
+// --- GetImagePath ---
+
+func TestGetImagePath_Found(t *testing.T) {
+	db := setupTestDB(t)
+	file := walk.FileInfo{
+		Path:     "/photos/test.jpg",
+		FileName: "test.jpg",
+		Size:     1000,
+		MimeType: "image/jpeg",
+	}
+	UpsertImagePath(db, file, "", "")
+
+	var id string
+	db.QueryRow("SELECT id FROM images WHERE file_path = ?", file.Path).Scan(&id)
+
+	filePath, mimeType, previewPath, err := GetImagePath(db, id)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if filePath != file.Path {
+		t.Errorf("expected file_path %s, got %s", file.Path, filePath)
+	}
+	if mimeType != file.MimeType {
+		t.Errorf("expected mime_type %s, got %s", file.MimeType, mimeType)
+	}
+	if previewPath != "" {
+		t.Errorf("expected empty preview_path, got %s", previewPath)
+	}
+}
+
+func TestGetImagePath_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	_, _, _, err := GetImagePath(db, "9999")
+	if err == nil {
+		t.Error("expected error for non-existent image, got nil")
+	}
+}
+
+// --- GetImagesWithCount pagination and sort variants ---
+
+func TestGetImagesWithCount_Pagination(t *testing.T) {
+	db := setupTestDB(t)
+	for i := 0; i < 5; i++ {
+		seedImage(t, db, filepath.Join("/photos", filepath.Base(filepath.FromSlash(
+			"/photos/"+string(rune('a'+i))+".jpg",
+		))))
+	}
+
+	images, count, err := GetImagesWithCount(db, ImageQuery{Limit: 2, Offset: 2, Sort: "filename", Order: "asc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 5 {
+		t.Errorf("expected total count 5, got %d", count)
+	}
+	if len(images) != 2 {
+		t.Errorf("expected 2 images on page, got %d", len(images))
+	}
+}
+
+func TestGetImagesWithCount_SortByRating(t *testing.T) {
+	db := setupTestDB(t)
+	idA := seedImage(t, db, "/photos/a.jpg")
+	seedImage(t, db, "/photos/b.jpg")
+	db.Exec("UPDATE images SET rating = 5 WHERE id = ?", idA)
+
+	images, _, err := GetImagesWithCount(db, ImageQuery{Limit: 10, Sort: "rating", Order: "desc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(images) < 2 {
+		t.Fatalf("expected 2 images, got %d", len(images))
+	}
+	if images[0].Filename != "a.jpg" {
+		t.Errorf("expected a.jpg (rating 5) first, got %s", images[0].Filename)
+	}
+}
+
+func TestGetImagesWithCount_OrderAsc(t *testing.T) {
+	db := setupTestDB(t)
+	seedImage(t, db, "/photos/z.jpg")
+	seedImage(t, db, "/photos/a.jpg")
+
+	images, _, err := GetImagesWithCount(db, ImageQuery{Limit: 10, Sort: "filename", Order: "asc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(images) < 2 {
+		t.Fatalf("expected 2 images, got %d", len(images))
+	}
+	if images[0].Filename != "a.jpg" {
+		t.Errorf("expected a.jpg first in asc order, got %s", images[0].Filename)
+	}
+}
+
+// --- GetAllTags with data ---
+
+func TestGetAllTags_WithData(t *testing.T) {
+	db := setupTestDB(t)
+	CreateTag(db, "Zebra")
+	CreateTag(db, "Apple")
+	CreateTag(db, "Mango")
+
+	tags, err := GetAllTags(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 3 {
+		t.Errorf("expected 3 tags, got %d", len(tags))
+	}
+	// Should be alphabetically ordered: Apple, Mango, Zebra
+	if tags[0].Name != "Apple" {
+		t.Errorf("expected Apple first (alphabetical), got %s", tags[0].Name)
+	}
+	if tags[2].Name != "Zebra" {
+		t.Errorf("expected Zebra last, got %s", tags[2].Name)
+	}
+}
+
+// --- GetImageTags with data ---
+
+func TestGetImageTags_WithData(t *testing.T) {
+	db := setupTestDB(t)
+	id := seedImage(t, db, "/photos/a.jpg")
+	tag1, _ := CreateTag(db, "Wedding")
+	tag2, _ := CreateTag(db, "Landscape")
+	PatchImagesWithRatingOrTag(db, id, PatchImageInput{Tags: []int{tag1.Id, tag2.Id}})
+
+	tags, err := GetImageTags(db, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(tags))
+	}
+	// Alphabetical: Landscape, Wedding
+	if tags[0].Name != "Landscape" {
+		t.Errorf("expected Landscape first, got %s", tags[0].Name)
+	}
+}

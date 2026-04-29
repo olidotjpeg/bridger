@@ -372,6 +372,8 @@ Serve the cached thumbnail file from disk.
 
 **Done when:** The browser can load a thumbnail by hitting this endpoint.
 
+> **Note (implementation deviation):** This endpoint was not implemented. Instead, `thumbnail_path` in the API response contains the direct static file URL (e.g. `/thumbs/<hash>.jpg`), which the frontend uses directly. This is simpler and avoids a redundant DB lookup + file proxy, but it couples the frontend to the static file-serving path rather than the image-ID abstraction. If the thumbs directory location ever changes, the stored paths in the DB will need updating. Acceptable for the current scope.
+
 ---
 
 ### [X] 4. `GET /api/images/:id/full`
@@ -613,7 +615,7 @@ Allow adding and removing tags from images in the detail view.
 
 ---
 
-### [ ] 5. Bulk operations
+### [X] 5. Bulk operations
 
 Allow selecting multiple images and applying a rating or tag to all of them.
 
@@ -636,7 +638,7 @@ Allow selecting multiple images and applying a rating or tag to all of them.
 
 ## Tasks
 
-### [ ] 1. `fsnotify` folder watcher
+### [X] 1. `fsnotify` folder watcher
 
 Watch the configured photo directory for new files and trigger indexing automatically.
 
@@ -649,9 +651,11 @@ Watch the configured photo directory for new files and trigger indexing automati
 
 **Done when:** Copying a photo into the watch folder triggers automatic indexing within a few seconds.
 
+> **Note — recursive watching:** `fsnotify` does not watch subdirectories by default. The implementation handles this by walking the full directory tree at startup and calling `watcher.Add()` for every subdirectory found. When a new directory is created at runtime (e.g. an SD card dump creating a dated folder), the watcher detects it via a `Create` event and immediately begins watching it too. Files dropped into any nested folder will be indexed automatically.
+
 ---
 
-### [ ] 2. Scan progress in the sidebar
+### [X] 2. Scan progress in the sidebar
 
 Show live scan progress in the React sidebar using the `GET /api/scan/status` endpoint.
 

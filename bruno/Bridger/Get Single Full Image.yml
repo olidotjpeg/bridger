@@ -17,3 +17,9 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+tests:
+  - name: returns 200
+    assert: res.status == 200
+  - name: content-type is an image
+    assert: res.headers["content-type"].includes("image/")

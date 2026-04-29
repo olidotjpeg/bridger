@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
@@ -231,4 +232,57 @@ func PatchImagesWithRatingOrTag(db *sql.DB, id string, input PatchImageInput) (I
 	).Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath)
 
 	return img, err
+}
+
+// PruneStaleEntries removes rows whose file_path is under one of the given
+// dirs but is not in the foundPaths set. Only dirs that were successfully
+// walked should be passed, so we don't accidentally prune a dir that failed.
+func PruneStaleEntries(db *sql.DB, dirs []string, foundPaths map[string]bool) (int, error) {
+	if len(dirs) == 0 {
+		return 0, nil
+	}
+
+	// Build WHERE clause: file_path LIKE '<dir>/%' OR ...
+	// Escape LIKE special chars in the dir path.
+	escapeLike := func(s string) string {
+		s = strings.ReplaceAll(s, `\`, `\\`)
+		s = strings.ReplaceAll(s, `%`, `\%`)
+		s = strings.ReplaceAll(s, `_`, `\_`)
+		return s
+	}
+
+	placeholders := make([]string, len(dirs))
+	args := make([]any, len(dirs))
+	for i, d := range dirs {
+		placeholders[i] = `file_path LIKE ? ESCAPE '\'`
+		args[i] = escapeLike(d) + "/%"
+	}
+
+	rows, err := db.Query(
+		"SELECT file_path FROM images WHERE "+strings.Join(placeholders, " OR "),
+		args...,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var stale []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return 0, err
+		}
+		if !foundPaths[p] {
+			stale = append(stale, p)
+		}
+	}
+
+	for _, p := range stale {
+		if _, err := db.Exec("DELETE FROM images WHERE file_path = ?", p); err != nil {
+			log.Printf("prune: failed to delete %s: %v", p, err)
+		}
+	}
+
+	return len(stale), nil
 }

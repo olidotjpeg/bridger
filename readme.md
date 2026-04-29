@@ -48,13 +48,35 @@ Produces a single `bridger` binary with the frontend embedded. Run it directly:
 ./bridger --dir /path/to/photos
 ```
 
+## Data storage
+
+On first launch (with no CLI flags), Bridger stores everything under the platform config directory:
+
+| OS | Location |
+| --- | --- |
+| macOS | `~/Library/Application Support/bridger/` |
+| Linux | `~/.config/bridger/` |
+| Windows | `%AppData%\bridger\` |
+
+Three files live there:
+
+| File | Description |
+| --- | --- |
+| `config.json` | Scan directories, database path, thumbnails path |
+| `bridger.db` | SQLite database (metadata, ratings, tags) |
+| `thumbs/` | Generated thumbnail cache |
+
+To reset Bridger completely, delete the directory. To just re-run the setup wizard, delete `config.json`.
+
 ## Flags
+
+CLI flags override the config file and are useful for scripting or one-off runs. Passing `--dir` skips the setup wizard entirely and does **not** modify the config file.
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--dir` | `.` | Root directory to scan for photos |
-| `--db` | `./bridger.db` | Path to the SQLite database file |
-| `--thumbs` | `./thumbs` | Directory to store generated thumbnails |
+| `--dir` | *(from config)* | Root directory to scan for photos |
+| `--db` | *(from config)* | Path to the SQLite database file |
+| `--thumbs` | *(from config)* | Directory to store generated thumbnails |
 
 ## Supported formats
 
@@ -80,6 +102,9 @@ Extensions are matched case-insensitively.
 | `POST` | `/api/tags` | Create a new tag |
 | `GET` | `/api/scan/status` | Get current scan progress |
 | `POST` | `/api/scan` | Trigger a background re-scan |
+| `GET` | `/api/config` | Get current config and setup state |
+| `PUT` | `/api/config` | Save scan directories and trigger initial scan |
+| `GET` | `/api/fs/list` | List subdirectories at a path (used by setup wizard) |
 
 ### Query params for `GET /api/images`
 

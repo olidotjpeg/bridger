@@ -1,4 +1,5 @@
 import './Sidebar.css'
+import type { ScanStatus } from '../../api/images'
 
 interface SidebarProps {
   sort: string
@@ -7,6 +8,8 @@ interface SidebarProps {
   onSortChange: (sort: string) => void
   onOrderChange: (order: string) => void
   onRatingChange: (rating: number | undefined) => void
+  scanStatus?: ScanStatus
+  onTriggerScan: () => void
 }
 
 const RATING_OPTIONS: { label: string; value: number | undefined }[] = [
@@ -18,7 +21,12 @@ const RATING_OPTIONS: { label: string; value: number | undefined }[] = [
   { label: '5', value: 5 },
 ]
 
-export default function Sidebar({ sort, order, minRating, onSortChange, onOrderChange, onRatingChange }: SidebarProps) {
+export default function Sidebar({ sort, order, minRating, onSortChange, onOrderChange, onRatingChange, scanStatus, onTriggerScan }: SidebarProps) {
+  const isRunning = scanStatus?.running ?? false
+  const progress = isRunning && scanStatus && scanStatus.total > 0
+    ? Math.round((scanStatus.processed / scanStatus.total) * 100)
+    : null
+
   return (
     <div className="sidebar">
       <div className="sidebar-logo">Bridger</div>
@@ -53,6 +61,32 @@ export default function Sidebar({ sort, order, minRating, onSortChange, onOrderC
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="sidebar-section sidebar-scan">
+        <span className="sidebar-label">Library</span>
+        <button
+          className={`scan-button ${isRunning ? 'scanning' : ''}`}
+          onClick={onTriggerScan}
+          disabled={isRunning}
+        >
+          {isRunning ? 'Scanning…' : 'Scan now'}
+        </button>
+
+        {isRunning && scanStatus && (
+          <div className="scan-progress">
+            <div className="scan-progress-bar">
+              <div
+                className="scan-progress-fill"
+                style={{ width: `${progress ?? 0}%` }}
+              />
+            </div>
+            <span className="scan-progress-text">
+              {scanStatus.processed.toLocaleString()} / {scanStatus.total.toLocaleString()}
+              {scanStatus.errors > 0 && ` · ${scanStatus.errors} errors`}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

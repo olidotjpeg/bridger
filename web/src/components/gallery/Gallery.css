@@ -1,7 +1,7 @@
 ul.gallery {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 3px;
+  gap: 2px;
   list-style: none;
 }
 
@@ -18,53 +18,51 @@ ul.gallery > li img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.2s ease, filter 0.2s ease;
+  transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 ul.gallery > li:hover img {
-  transform: scale(1.04);
-  filter: brightness(1.1);
+  transform: scale(1.05);
+  filter: brightness(1.08);
 }
 
+/* Selection check badge */
 .gallery-check {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 7px;
+  left: 7px;
   background: var(--accent);
   color: #fff;
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 9px;
+  font-weight: 600;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.5);
 }
 
-ul.gallery > li.selected {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-ul.gallery > li.selected img {
-  opacity: 0.7;
-}
-
+/* Star rating badge */
 .gallery-rating {
   position: absolute;
-  bottom: 6px;
-  right: 6px;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 3px;
-  color: var(--accent);
-  font-size: 10px;
+  bottom: 7px;
+  right: 7px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  border-radius: var(--radius-sm);
+  color: var(--star);
+  font-size: 9px;
   padding: 2px 5px;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   pointer-events: none;
+  z-index: 2;
 }
 
+/* Dark scrim on hover */
 ul.gallery > li::after {
   content: '';
   position: absolute;
@@ -72,8 +70,26 @@ ul.gallery > li::after {
   background: rgba(0, 0, 0, 0);
   transition: background 0.2s ease;
   pointer-events: none;
+  z-index: 1;
 }
 
 ul.gallery > li:hover::after {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* Selected state */
+ul.gallery > li.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 3;
+}
+
+ul.gallery > li.selected img {
+  opacity: 0.65;
+}
+
+/* Keyboard cursor */
+ul.gallery > li.cursor:not(.selected) {
+  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline-offset: -2px;
 }

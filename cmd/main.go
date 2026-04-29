@@ -1,27 +1,56 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log"
+	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"time"
 
 	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/olidotjpeg/bridger/internal/api"
+	"github.com/olidotjpeg/bridger/internal/config"
 	"github.com/olidotjpeg/bridger/internal/db"
 	"github.com/olidotjpeg/bridger/internal/scanner"
+	"github.com/olidotjpeg/bridger/internal/watcher"
 )
 
 func main() {
-	walkDir, dbPath, thumbDir := setupCLIFlags()
-	vips.Startup(nil)
-	defer vips.Shutdown()
-
-	database, err := db.Database(dbPath)
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := os.MkdirAll(thumbDir, 0755); err != nil {
+	dir := flag.String("dir", "", "Root directory to scan (overrides config)")
+	dbPath := flag.String("db", cfg.DBPath, "Path to SQLite database")
+	thumbsDir := flag.String("thumbs", cfg.ThumbsPath, "Directory to store thumbnails")
+	flag.Parse()
+
+	if *dir != "" {
+		cfg.ScanDirs = []string{*dir}
+	}
+	cfg.DBPath = *dbPath
+	cfg.ThumbsPath = *thumbsDir
+
+	needsSetup := config.NeedsSetup(cfg) && *dir == ""
+
+	vips.Startup(nil)
+	defer vips.Shutdown()
+
+	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0700); err != nil {
+		log.Fatal(err)
+	}
+
+	database, err := db.Database(cfg.DBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := os.MkdirAll(cfg.ThumbsPath, 0755); err != nil {
 		log.Fatal(err)
 	}
 
@@ -30,30 +59,77 @@ func main() {
 	}
 
 	state := &scanner.ScanState{}
+	reconfigCh := make(chan config.Config, 1)
 
-	go func() {
-		if err := scanner.RunScan(walkDir, thumbDir, database, state); err != nil {
-			log.Printf("scan error: %v", err)
-		}
-	}()
+	go watchReconfig(reconfigCh, database, state)
+
+	if !needsSetup {
+		reconfigCh <- *cfg
+	}
 
 	router := api.SetupRouter(database, state, api.Config{
-		WalkDir:  walkDir,
-		ThumbDir: thumbDir,
+		ThumbDir:   cfg.ThumbsPath,
+		NeedsSetup: needsSetup,
+		CurrentCfg: cfg,
+		ReconfigCh: reconfigCh,
 	})
 
-	router.Static("/thumbs", thumbDir)
+	router.Static("/thumbs", cfg.ThumbsPath)
 	serveStaticFiles(router)
+
+	if needsSetup {
+		go openBrowserWhenReady(browserURL())
+	}
 
 	router.Run()
 }
 
-func setupCLIFlags() (string, string, string) {
-	dir := flag.String("dir", ".", "Root Directory to Scan")
-	dbPath := flag.String("db", "./bridger.db", "Path to the SQLite Database File")
-	thumbsDir := flag.String("thumbs", "./thumbs", "Directory to store thumbnails")
+func watchReconfig(ch <-chan config.Config, database *sql.DB, state *scanner.ScanState) {
+	var stopWatcher func()
+	for cfg := range ch {
+		if stopWatcher != nil {
+			stopWatcher()
+		}
+		c := cfg
+		go func() {
+			if err := scanner.RunScan(c.ScanDirs, c.ThumbsPath, database, state); err != nil {
+				log.Printf("scan error: %v", err)
+			}
+		}()
+		stop, err := watcher.Watch(cfg.ScanDirs, cfg.ThumbsPath, database, state)
+		if err != nil {
+			log.Printf("watcher: failed to start: %v", err)
+			continue
+		}
+		stopWatcher = stop
+	}
+}
 
-	flag.Parse()
+func openBrowserWhenReady(url string) {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get("http://localhost:8080/api/ping")
+		if err == nil && resp.StatusCode == 200 {
+			resp.Body.Close()
+			openBrowser(url)
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	log.Println("server did not start in time; skipping browser open")
+}
 
-	return *dir, *dbPath, *thumbsDir
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	}
+	if cmd != nil {
+		_ = cmd.Start()
+	}
 }

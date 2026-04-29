@@ -13,3 +13,7 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+tests:
+  - name: returns 202 Accepted
+    assert: res.status == 202

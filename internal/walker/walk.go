@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"log"
 	"mime"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -94,4 +95,25 @@ func hasExtension(path string, extensions []string) bool {
 	}
 
 	return false
+}
+
+// StatFile returns a FileInfo for a single file path without walking a directory.
+// This is used by the watcher to index individual newly-created files.
+func StatFile(path string) (*FileInfo, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+	if mimeType == "" {
+		mimeType = mimeTypes[strings.ToLower(filepath.Ext(path))]
+	}
+
+	return &FileInfo{
+		Path:     path,
+		Size:     info.Size(),
+		FileName: filepath.Base(path),
+		MimeType: mimeType,
+	}, nil
 }

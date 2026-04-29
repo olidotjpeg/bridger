@@ -5,10 +5,11 @@
 }
 
 .app-sidebar {
-  width: 210px;
+  width: var(--sidebar-w);
   flex-shrink: 0;
+
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle);
   overflow-y: auto;
 }
 
@@ -22,50 +23,57 @@
 
 .gallery-container {
   flex: 1;
-  padding: 10px;
+  padding: 12px;
 }
 
 .status-message {
-  padding: 40px;
+  padding: 60px 40px;
   text-align: center;
   color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
 
 .status-message.error {
-  color: #c0392b;
+  color: var(--reject-text);
 }
 
 .pagination {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 14px;
-  border-top: 1px solid var(--border);
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 
 .pagination button {
-  padding: 6px 16px;
-  background: var(--surface-raised);
+  padding: 5px 18px;
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  transition: background 0.15s, border-color 0.15s;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .pagination button:hover:not(:disabled) {
-  background: var(--surface);
-  border-color: #3a3a3a;
+  color: var(--text);
+  border-color: var(--text-muted);
 }
 
 .pagination button:disabled {
-  opacity: 0.3;
+  opacity: 0.2;
   cursor: not-allowed;
 }
 
 .page-info {
   color: var(--text-muted);
-  min-width: 90px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  min-width: 100px;
   text-align: center;
 }

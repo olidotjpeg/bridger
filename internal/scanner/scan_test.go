@@ -77,3 +77,35 @@ func TestStatus(t *testing.T) {
 		t.Errorf("expected Errors 3, got %d", status.Errors)
 	}
 }
+
+func TestIncrementProcessed(t *testing.T) {
+	state := &ScanState{}
+
+	for i := 0; i < 5; i++ {
+		state.IncrementProcessed()
+	}
+
+	status := state.Status()
+	if status.Processed != 5 {
+		t.Errorf("expected Processed 5 after 5 increments, got %d", status.Processed)
+	}
+}
+
+func TestIncrementProcessed_Concurrent(t *testing.T) {
+	state := &ScanState{}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			state.IncrementProcessed()
+		}()
+	}
+	wg.Wait()
+
+	status := state.Status()
+	if status.Processed != 100 {
+		t.Errorf("expected Processed 100 after 100 concurrent increments, got %d", status.Processed)
+	}
+}

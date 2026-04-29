@@ -34,3 +34,15 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+tests:
+  - name: returns 200
+    assert: res.status == 200
+  - name: data is an array
+    assert: res.body.data != null
+  - name: total is a number
+    assert: res.body.total >= 0
+  - name: page reflects request param
+    assert: res.body.page == 1
+  - name: limit reflects request param
+    assert: res.body.limit == 50

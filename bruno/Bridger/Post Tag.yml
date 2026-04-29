@@ -19,3 +19,11 @@ settings:
   timeout: 0
   followRedirects: true
   maxRedirects: 5
+
+tests:
+  - name: returns 201 Created
+    assert: res.status == 201
+  - name: tag has an id
+    assert: res.body.id > 0
+  - name: tag name matches request
+    assert: res.body.name == "Wedding"

@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/olidotjpeg/bridger/internal/config"
 	"github.com/olidotjpeg/bridger/internal/db"
 	"github.com/olidotjpeg/bridger/internal/scanner"
 	walk "github.com/olidotjpeg/bridger/internal/walker"
@@ -36,7 +39,14 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 	}
 
 	state := &scanner.ScanState{}
-	router := SetupRouter(database, state, Config{WalkDir: ".", ThumbDir: t.TempDir()})
+	reconfigCh := make(chan config.Config, 1)
+	cfg := &config.Config{ScanDirs: []string{"."}, DBPath: ":memory:", ThumbsPath: t.TempDir()}
+	router := SetupRouter(database, state, Config{
+		ThumbDir:   cfg.ThumbsPath,
+		NeedsSetup: false,
+		CurrentCfg: cfg,
+		ReconfigCh: reconfigCh,
+	})
 
 	t.Cleanup(func() { database.Close() })
 
@@ -332,5 +342,217 @@ func TestGetImageTags_Empty(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &tags)
 	if tags == nil {
 		t.Error("expected empty array, got null")
+	}
+}
+
+func TestGetImageTags_WithData(t *testing.T) {
+	router, database := setupTestRouter(t)
+	id := seedRouterImage(t, database, "/photos/a.jpg")
+
+	// Create tags and associate them via PATCH
+	tag1Body := strings.NewReader(`{"name": "Wedding"}`)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/tags", tag1Body)
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	var tag1 db.Tag
+	json.Unmarshal(w.Body.Bytes(), &tag1)
+
+	patchBody := strings.NewReader(`{"tags": [` + strconv.Itoa(tag1.Id) + `]}`)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("PATCH", "/api/images/"+id, patchBody)
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/images/"+id+"/tags", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var tags []db.Tag
+	json.Unmarshal(w.Body.Bytes(), &tags)
+	if len(tags) != 1 {
+		t.Errorf("expected 1 tag, got %d", len(tags))
+	}
+	if tags[0].Name != "Wedding" {
+		t.Errorf("expected tag name Wedding, got %s", tags[0].Name)
+	}
+}
+
+// --- POST /api/scan happy path ---
+
+func TestPostScan_Accepted(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/scan", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("expected 202, got %d", w.Code)
+	}
+}
+
+// --- PATCH /api/images/:id with tags ---
+
+func TestPatchImage_Tags(t *testing.T) {
+	router, database := setupTestRouter(t)
+	id := seedRouterImage(t, database, "/photos/a.jpg")
+
+	// Create a tag first
+	tagBody := strings.NewReader(`{"name": "Landscape"}`)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/tags", tagBody)
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	var tag db.Tag
+	json.Unmarshal(w.Body.Bytes(), &tag)
+
+	// Patch image with the tag
+	patchBody := strings.NewReader(`{"tags": [` + strconv.Itoa(tag.Id) + `]}`)
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("PATCH", "/api/images/"+id, patchBody)
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	// Verify via GET /api/images/:id/tags
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/images/"+id+"/tags", nil)
+	router.ServeHTTP(w, req)
+
+	var tags []db.Tag
+	json.Unmarshal(w.Body.Bytes(), &tags)
+	if len(tags) != 1 || tags[0].Name != "Landscape" {
+		t.Errorf("expected Landscape tag after patch, got %v", tags)
+	}
+}
+
+// --- GET /api/images/:id/full ---
+
+func TestGetImageFull_JPEG(t *testing.T) {
+	router, database := setupTestRouter(t)
+
+	// Create a real temp file so c.File can serve it
+	f, err := os.CreateTemp(t.TempDir(), "test*.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("fake jpeg bytes")
+	f.Close()
+
+	id := seedRouterImage(t, database, f.Name())
+	// Update the mime_type to image/jpeg explicitly
+	database.Exec("UPDATE images SET mime_type = 'image/jpeg' WHERE id = ?", id)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images/"+id+"/full", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "image/") {
+		t.Errorf("expected image/* Content-Type, got %s", ct)
+	}
+}
+
+func TestGetImageFull_RAW_WithPreview(t *testing.T) {
+	router, database := setupTestRouter(t)
+
+	// Create a temp preview JPEG that can be served
+	previewFile, err := os.CreateTemp(t.TempDir(), "preview*.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previewFile.WriteString("fake preview jpeg")
+	previewFile.Close()
+
+	// Seed a RAW image record with a preview_path
+	rawFile := walk.FileInfo{
+		Path:     "/photos/raw.cr2",
+		FileName: "raw.cr2",
+		Size:     1000,
+		MimeType: "image/x-canon-cr2",
+	}
+	db.UpsertImagePath(database, rawFile, "", previewFile.Name())
+
+	var id string
+	database.QueryRow("SELECT id FROM images WHERE file_path = ?", rawFile.Path).Scan(&id)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images/"+id+"/full", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for RAW with preview, got %d", w.Code)
+	}
+}
+
+func TestGetImageFull_RAW_NoPreview(t *testing.T) {
+	router, database := setupTestRouter(t)
+
+	// Seed a RAW image with no preview_path
+	rawFile := walk.FileInfo{
+		Path:     "/photos/raw_nopreview.cr2",
+		FileName: "raw_nopreview.cr2",
+		Size:     1000,
+		MimeType: "image/x-canon-cr2",
+	}
+	db.UpsertImagePath(database, rawFile, "", "")
+
+	var id string
+	database.QueryRow("SELECT id FROM images WHERE file_path = ?", rawFile.Path).Scan(&id)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images/"+id+"/full", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for RAW with no preview, got %d", w.Code)
+	}
+}
+
+// --- GET /api/images sort/order variants ---
+
+func TestGetImages_SortByFilename(t *testing.T) {
+	router, database := setupTestRouter(t)
+	seedRouterImage(t, database, "/photos/z.jpg")
+	seedRouterImage(t, database, "/photos/a.jpg")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images?sort=filename&order=asc", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp PaginatedResponse[db.Image]
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Data) < 2 {
+		t.Fatalf("expected 2 images, got %d", len(resp.Data))
+	}
+	if resp.Data[0].Filename != "a.jpg" {
+		t.Errorf("expected a.jpg first in asc filename order, got %s", resp.Data[0].Filename)
+	}
+}
+
+func TestGetImages_InvalidOrderFallback(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images?order=SIDEWAYS", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with safe fallback order, got %d", w.Code)
 	}
 }
