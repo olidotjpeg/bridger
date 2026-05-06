@@ -1,0 +1,5 @@
+ALTER TABLE images ADD COLUMN camera_model TEXT;
+ALTER TABLE images ADD COLUMN iso INTEGER;
+ALTER TABLE images ADD COLUMN aperture REAL;
+ALTER TABLE images ADD COLUMN shutter_speed TEXT;
+ALTER TABLE images ADD COLUMN focal_length REAL;

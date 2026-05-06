@@ -165,3 +165,5 @@ Tags must follow the `v*` pattern (e.g. `v1.0.0`, `v0.3.1`).
 ```bash
 CGO_ENABLED=0 go test -tags dev ./...
 ```
+
+EXIF tests (`internal/exif`) require real image files and are skipped in CI. To run them locally, add your own images to `internal/walker/TestData/` matching the filenames in `exif_test.go`.
