@@ -36,6 +36,18 @@ func TestExtractEXIF_CR2(t *testing.T) {
 	if data.CaptureDate.IsZero() {
 		t.Error("expected capture date to be set for CR2")
 	}
+	if data.CameraModel == "" {
+		t.Error("expected camera model to be set for CR2")
+	}
+	if data.Aperture == 0 {
+		t.Error("expected aperture to be set for CR2")
+	}
+	if data.ShutterSpeed == "" {
+		t.Error("expected shutter speed to be set for CR2")
+	}
+	if data.FocalLength == 0 {
+		t.Error("expected focal length to be set for CR2")
+	}
 }
 
 func TestExtractEXIF_RAF(t *testing.T) {
@@ -48,6 +60,18 @@ func TestExtractEXIF_RAF(t *testing.T) {
 	}
 	if data.CaptureDate.IsZero() {
 		t.Error("expected capture date to be set for RAF")
+	}
+	if data.CameraModel == "" {
+		t.Error("expected camera model to be set for RAF")
+	}
+	if data.Aperture == 0 {
+		t.Error("expected aperture to be set for RAF")
+	}
+	if data.ShutterSpeed == "" {
+		t.Error("expected shutter speed to be set for RAF")
+	}
+	if data.FocalLength == 0 {
+		t.Error("expected focal length to be set for RAF")
 	}
 }
 
