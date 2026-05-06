@@ -18,3 +18,8 @@ internal/walker/TestData
 # OS files
 .DS_Store
 Thumbs.db
+
+
+claude.md
+
+./claude

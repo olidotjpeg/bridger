@@ -6,15 +6,9 @@ A self-hosted photo culling and management tool. Scans a folder of photos, index
 
 - Go 1.22+
 - Node.js 18+
-- `libvips` (required by `govips` for thumbnail generation):
-  ```bash
-  brew install vips
-  ```
-- A C compiler (required by `go-sqlite3`) — on macOS this is provided by Xcode Command Line Tools:
-  ```bash
-  xcode-select --install
-  ```
 - [`just`](https://github.com/casey/just) (optional, for the dev/build recipes)
+
+No C compiler or native libraries required — the binary is pure Go (`CGO_ENABLED=0`).
 
 ## Development
 
@@ -142,8 +136,32 @@ bridger/
 └── ideas.md               # Feature backlog
 ```
 
+## Releases
+
+Releases are automated via GitHub Actions. To publish a new release:
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+This triggers the release workflow which:
+1. Builds the frontend (`npm ci && npm run build`)
+2. Compiles binaries for all platforms with the version baked in via `-ldflags`
+3. Creates a GitHub Release with auto-generated release notes and the following artifacts:
+
+| Artifact | Platform |
+| --- | --- |
+| `bridger-linux-amd64` | Linux x86-64 |
+| `bridger-linux-arm64` | Linux ARM64 |
+| `bridger-darwin-amd64` | macOS Intel |
+| `bridger-darwin-arm64` | macOS Apple Silicon |
+| `bridger-windows-amd64.exe` | Windows x86-64 |
+
+Tags must follow the `v*` pattern (e.g. `v1.0.0`, `v0.3.1`).
+
 ## Test
 
 ```bash
-go test ./...
+CGO_ENABLED=0 go test -tags dev ./...
 ```

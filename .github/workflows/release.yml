@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.26.1'
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Build frontend
+      run: |
+        cd web
+        npm ci
+        npm run build
+
+    - name: Build Linux AMD64
+      run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=${{ github.ref_name }}" -o dist/bridger-linux-amd64 ./cmd
+
+    - name: Build Linux ARM64
+      run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-X main.version=${{ github.ref_name }}" -o dist/bridger-linux-arm64 ./cmd
+
+    - name: Build Windows AMD64
+      run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-X main.version=${{ github.ref_name }}" -o dist/bridger-windows-amd64.exe ./cmd
+
+    - name: Build Mac AMD64
+      run: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.version=${{ github.ref_name }}" -o dist/bridger-darwin-amd64 ./cmd
+
+    - name: Build Mac ARM64
+      run: CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-X main.version=${{ github.ref_name }}" -o dist/bridger-darwin-arm64 ./cmd
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          dist/bridger-linux-amd64
+          dist/bridger-linux-arm64
+          dist/bridger-windows-amd64.exe
+          dist/bridger-darwin-amd64
+          dist/bridger-darwin-arm64
+        generate_release_notes: true
