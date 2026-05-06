@@ -1,0 +1,37 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.26.1'
+
+    - name: Build Linux
+      run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/bridger-linux-amd64 ./cmd
+
+    - name: Build Windows
+      run: GO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/bridger-windows-amd64.exe ./cmd
+
+    - name: Build Mac AMD
+      run: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/bridger-darwin-amd64 ./cmd
+
+    - name: Build Mac ARM
+      run: CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/bridger-darwin-arm64 ./cmd
+
+    - name: Test
+      run: CGO_ENABLED=0 go test -tags dev ./...
