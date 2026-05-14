@@ -94,7 +94,9 @@ func IsConflict(err error) bool {
 type ImageQuery struct {
 	Limit, Offset int
 	Sort, Order   string
-	MinRating     *int // nil = no filter
+	MinRating     *int    // nil = no filter
+	DateFrom      *string // nil = no filter, format "2025-04-05"
+	DateTo        *string // nil = no filter, format "2025-04-07"
 }
 
 func Database(dbPath string) (*sql.DB, error) {
@@ -174,11 +176,23 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 	var images []Image
 	var count int
 
-	where := ""
+	var conditions []string
 	var args []any
 	if q.MinRating != nil {
-		where = "WHERE rating >= ?"
+		conditions = append(conditions, "rating >= ?")
 		args = append(args, *q.MinRating)
+	}
+	if q.DateFrom != nil {
+		conditions = append(conditions, "DATE(capture_date) >= ?")
+		args = append(args, *q.DateFrom)
+	}
+	if q.DateTo != nil {
+		conditions = append(conditions, "DATE(capture_date) <= ?")
+		args = append(args, *q.DateTo)
+	}
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM images %s", where), args...).Scan(&count)
@@ -255,6 +269,35 @@ func PatchImagesWithRatingOrTag(db *sql.DB, id string, input PatchImageInput) (I
 	).Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath, &img.CameraModel, &img.ISO, &img.Aperture, &img.ShutterSpeed, &img.FocalLength)
 
 	return img, err
+}
+
+type DateGroup struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+func GetDateGroups(db *sql.DB) ([]DateGroup, error) {
+	rows, err := db.Query(`
+		SELECT DATE(capture_date) as date, COUNT(*) as count
+		FROM images
+		WHERE capture_date IS NOT NULL
+		GROUP BY date
+		ORDER BY date DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	groups := []DateGroup{}
+	for rows.Next() {
+		var g DateGroup
+		if err := rows.Scan(&g.Date, &g.Count); err != nil {
+			return nil, err
+		}
+		groups = append(groups, g)
+	}
+	return groups, nil
 }
 
 // PruneStaleEntries removes rows whose file_path is under one of the given
