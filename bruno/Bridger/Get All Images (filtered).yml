@@ -27,6 +27,14 @@ http:
       value: "1"
       type: query
       enabled: true
+    - name: from
+      value: "2025-01-01"
+      type: query
+      enabled: false
+    - name: to
+      value: "2025-12-31"
+      type: query
+      enabled: false
   auth: inherit
 
 settings:
