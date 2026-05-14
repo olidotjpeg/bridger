@@ -7,6 +7,11 @@ export interface Image {
   rating: number
   mime_type: string
   thumbnail_path: string
+  camera_model: string | null
+  iso: string | null
+  aperture: number | null
+  shutter_speed: string | null
+  focal_length: number | null
 }
 
 export interface Tag {

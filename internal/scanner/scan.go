@@ -97,9 +97,7 @@ func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanSt
 
 	for _, result := range results {
 		if exifData, err := exif.ExtractEXIF(result.Path); err == nil {
-			result.CaptureDate = exifData.CaptureDate
-			result.Width = exifData.Width
-			result.Height = exifData.Height
+			result.EXIFData = *exifData
 		}
 
 		previewPath := ""
