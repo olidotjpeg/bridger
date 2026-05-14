@@ -5,9 +5,12 @@ interface SidebarProps {
   sort: string
   order: string
   minRating: number | undefined
+  groupByDate: boolean
   onSortChange: (sort: string) => void
   onOrderChange: (order: string) => void
   onRatingChange: (rating: number | undefined) => void
+  onGroupByDateChange: (v: boolean) => void
+  onCullClick: () => void
   scanStatus?: ScanStatus
   onTriggerScan: () => void
 }
@@ -21,7 +24,7 @@ const RATING_OPTIONS: { label: string; value: number | undefined }[] = [
   { label: '5', value: 5 },
 ]
 
-export default function Sidebar({ sort, order, minRating, onSortChange, onOrderChange, onRatingChange, scanStatus, onTriggerScan }: SidebarProps) {
+export default function Sidebar({ sort, order, minRating, groupByDate, onSortChange, onOrderChange, onRatingChange, onGroupByDateChange, onCullClick, scanStatus, onTriggerScan }: SidebarProps) {
   const isRunning = scanStatus?.running ?? false
   const progress = isRunning && scanStatus && scanStatus.total > 0
     ? Math.round((scanStatus.processed / scanStatus.total) * 100)
@@ -61,6 +64,15 @@ export default function Sidebar({ sort, order, minRating, onSortChange, onOrderC
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="sidebar-section">
+        <span className="sidebar-label">View</span>
+        <div className="sidebar-toggle">
+          <button className={!groupByDate ? 'active' : ''} onClick={() => onGroupByDateChange(false)}>Grid</button>
+          <button className={groupByDate ? 'active' : ''} onClick={() => onGroupByDateChange(true)}>By date</button>
+        </div>
+        <button className="cull-trigger-btn" onClick={onCullClick}>Cull mode</button>
       </div>
 
       <div className="sidebar-section sidebar-scan">

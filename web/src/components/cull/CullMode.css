@@ -1,0 +1,205 @@
+.cull-mode {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #000;
+}
+
+/* Main image area */
+
+.cull-image-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.cull-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Info/controls overlay */
+
+.cull-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24px 20px 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.82));
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cull-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cull-filename {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cull-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(200, 200, 200, 0.55);
+  letter-spacing: 0.04em;
+}
+
+.cull-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cull-counter {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(200, 200, 200, 0.4);
+  letter-spacing: 0.06em;
+}
+
+/* Keyboard legend */
+
+.cull-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 5px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.cull-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.cull-legend kbd {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 1px 5px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+/* Filmstrip */
+
+.cull-filmstrip {
+  height: 96px;
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  scroll-behavior: smooth;
+}
+
+.cull-filmstrip::-webkit-scrollbar {
+  height: 3px;
+}
+
+.cull-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 82px;
+  height: 82px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.12s;
+}
+
+.cull-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cull-thumb:hover {
+  border-color: var(--text-muted);
+}
+
+.cull-thumb.active {
+  border-color: var(--accent);
+}
+
+.cull-thumb-badge {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 2px;
+  letter-spacing: 0.02em;
+}
+
+.cull-thumb-badge.reject {
+  background: var(--reject);
+  color: var(--reject-text);
+}
+
+.cull-thumb-badge.stars {
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--star);
+}
+
+/* Empty state */
+
+.cull-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cull-empty button {
+  padding: 7px 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.cull-empty button:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}

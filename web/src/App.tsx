@@ -5,7 +5,9 @@ import LightBox from './components/lightbox/Lightbox'
 import Sidebar from './components/sidebar/Sidebar'
 import BulkActionBar from './components/bulk/BulkActionBar'
 import Setup from './components/setup/Setup'
-import { fetchImages, fetchScanStatus, triggerScan, patchImage, fetchImageTags } from './api/images'
+import CullPicker from './components/cull/CullPicker'
+import CullMode from './components/cull/CullMode'
+import { fetchImages, fetchAllImages, fetchScanStatus, triggerScan, patchImage, fetchImageTags } from './api/images'
 import { fetchConfig } from './api/config'
 import type { Tag } from './api/images'
 import './App.css'
@@ -31,10 +33,28 @@ function App() {
   const [sort, setSort] = useState('capture_date')
   const [order, setOrder] = useState('desc')
   const [minRating, setMinRating] = useState<number | undefined>(undefined)
+  const [groupByDate, setGroupByDate] = useState(false)
+  const [cullMode, setCullMode] = useState(false)
+  const [cullPickerOpen, setCullPickerOpen] = useState(false)
+  const [cullDateFrom, setCullDateFrom] = useState<string | undefined>(undefined)
+  const [cullDateTo, setCullDateTo] = useState<string | undefined>(undefined)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['images', page, sort, order, minRating],
-    queryFn: () => fetchImages({ page, sort, order, minRating })
+    queryFn: () => fetchImages({ page, sort, order, minRating }),
+    enabled: !groupByDate,
+  })
+
+  const { data: allImages, isLoading: allImagesLoading, isError: allImagesError } = useQuery({
+    queryKey: ['images-all', sort, order, minRating],
+    queryFn: () => fetchAllImages({ sort, order, minRating }),
+    enabled: groupByDate,
+  })
+
+  const { data: cullImages = [], isLoading: cullLoading } = useQuery({
+    queryKey: ['images-cull', sort, order, minRating, cullDateFrom, cullDateTo],
+    queryFn: () => fetchAllImages({ sort, order, minRating, dateFrom: cullDateFrom, dateTo: cullDateTo }),
+    enabled: cullMode,
   })
 
   const { data: scanStatus } = useQuery({
@@ -111,6 +131,19 @@ function App() {
     clearSelection()
   }
 
+  function handleCullStart(dateFrom?: string, dateTo?: string) {
+    setCullDateFrom(dateFrom)
+    setCullDateTo(dateTo)
+    setCullPickerOpen(false)
+    setCullMode(true)
+  }
+
+  function handleCullExit() {
+    setCullMode(false)
+    setCullDateFrom(undefined)
+    setCullDateTo(undefined)
+  }
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return
@@ -127,6 +160,7 @@ function App() {
   useEffect(() => {
     if (wasRunning === false) {
       queryClient.invalidateQueries({ queryKey: ['images'] })
+      queryClient.invalidateQueries({ queryKey: ['images-all'] })
     }
   }, [wasRunning])
 
@@ -135,44 +169,70 @@ function App() {
 
   return (
     <div className="app">
-      <aside className="app-sidebar">
-        <Sidebar
-          sort={sort}
-          order={order}
-          minRating={minRating}
-          onSortChange={v => { setSort(v); resetPage() }}
-          onOrderChange={v => { setOrder(v); resetPage() }}
-          onRatingChange={v => { setMinRating(v); resetPage() }}
-          scanStatus={scanStatus}
-          onTriggerScan={() => scanMutation.mutate()}
-        />
+      <aside className={`app-sidebar${cullMode ? ' app-sidebar--cull' : ''}`}>
+        {cullMode ? (
+          <div className="cull-sidebar-strip">
+            <div className="sidebar-logo">B</div>
+            <button className="cull-strip-exit" onClick={handleCullExit} title="Exit cull mode">
+              ⊞
+            </button>
+          </div>
+        ) : (
+          <Sidebar
+            sort={sort}
+            order={order}
+            minRating={minRating}
+            groupByDate={groupByDate}
+            onSortChange={v => { setSort(v); resetPage() }}
+            onOrderChange={v => { setOrder(v); resetPage() }}
+            onRatingChange={v => { setMinRating(v); resetPage() }}
+            onGroupByDateChange={setGroupByDate}
+            onCullClick={() => setCullPickerOpen(true)}
+            scanStatus={scanStatus}
+            onTriggerScan={() => scanMutation.mutate()}
+          />
+        )}
       </aside>
 
       <main className="app-main">
-        {isLoading && <div className="status-message">Loading...</div>}
-        {isError && <div className="status-message error">Failed to load images</div>}
-        {data?.data && (
-          <div className="gallery-container">
-            <GalleryList
-              images={data.data}
-              selectedId={selectedId}
-              selectedIds={selectedIds}
-              onSelectId={setSelectedId}
-              onToggleSelect={toggleSelection}
-              onRangeSelect={rangeSelect}
-              lastSelectedIndex={lastSelectedIndex}
-              onSetLastSelectedIndex={setLastSelectedIndex}
-            />
-          </div>
+        {cullMode ? (
+          cullLoading
+            ? <div className="status-message">Loading…</div>
+            : <CullMode images={cullImages} onExit={handleCullExit} />
+        ) : (
+          <>
+            {(isLoading || allImagesLoading) && <div className="status-message">Loading...</div>}
+            {(isError || allImagesError) && <div className="status-message error">Failed to load images</div>}
+            {(() => {
+              const images = groupByDate ? allImages ?? null : data?.data ?? null
+              return images && (
+                <div className="gallery-container">
+                  <GalleryList
+                    images={images}
+                    groupByDate={groupByDate}
+                    selectedId={selectedId}
+                    selectedIds={selectedIds}
+                    onSelectId={setSelectedId}
+                    onToggleSelect={toggleSelection}
+                    onRangeSelect={rangeSelect}
+                    lastSelectedIndex={lastSelectedIndex}
+                    onSetLastSelectedIndex={setLastSelectedIndex}
+                  />
+                </div>
+              )
+            })()}
+            {!groupByDate && (
+              <div className="pagination">
+                <button onClick={() => setPage(p => p - 1)} disabled={page === 1}>← Prev</button>
+                <span className="page-info">Page {page} of {totalPages}</span>
+                <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}>Next →</button>
+              </div>
+            )}
+          </>
         )}
-        <div className="pagination">
-          <button onClick={() => setPage(p => p - 1)} disabled={page === 1}>← Prev</button>
-          <span className="page-info">Page {page} of {totalPages}</span>
-          <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}>Next →</button>
-        </div>
       </main>
 
-      {data?.data && selectedId && (
+      {!cullMode && data?.data && selectedId && (
         <LightBox
           images={data.data}
           selectedId={selectedId}
@@ -181,12 +241,20 @@ function App() {
         />
       )}
 
-      {selectedIds.size > 0 && (
+      {!cullMode && selectedIds.size > 0 && (
         <BulkActionBar
           count={selectedIds.size}
           onSetRating={rating => bulkRatingMutation.mutate(rating)}
           onAddTag={tag => bulkTagMutation.mutate(tag)}
           onClear={clearSelection}
+        />
+      )}
+
+      {cullPickerOpen && (
+        <CullPicker
+          totalImages={data?.total ?? 0}
+          onStart={handleCullStart}
+          onCancel={() => setCullPickerOpen(false)}
         />
       )}
     </div>
