@@ -520,6 +520,133 @@ func TestGetImageFull_RAW_NoPreview(t *testing.T) {
 	}
 }
 
+func seedRouterImageWithDate(t *testing.T, database *sql.DB, path, captureDate string) string {
+	t.Helper()
+	id := seedRouterImage(t, database, path)
+	database.Exec("UPDATE images SET capture_date = ? WHERE id = ?", captureDate, id)
+	return id
+}
+
+// --- GET /api/dates ---
+
+func TestGetDates_Empty(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/dates", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var groups []db.DateGroup
+	json.Unmarshal(w.Body.Bytes(), &groups)
+	if groups == nil {
+		t.Error("expected empty array, got null")
+	}
+}
+
+func TestGetDates_WithData(t *testing.T) {
+	router, database := setupTestRouter(t)
+	seedRouterImageWithDate(t, database, "/photos/a.jpg", "2025-04-05")
+	seedRouterImageWithDate(t, database, "/photos/b.jpg", "2025-04-05")
+	seedRouterImageWithDate(t, database, "/photos/c.jpg", "2025-03-01")
+	seedRouterImage(t, database, "/photos/nodate.jpg") // excluded from dates
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/dates", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var groups []db.DateGroup
+	json.Unmarshal(w.Body.Bytes(), &groups)
+	if len(groups) != 2 {
+		t.Errorf("expected 2 date groups, got %d", len(groups))
+	}
+	if groups[0].Date != "2025-04-05" {
+		t.Errorf("expected 2025-04-05 first (DESC), got %s", groups[0].Date)
+	}
+	if groups[0].Count != 2 {
+		t.Errorf("expected count 2 for 2025-04-05, got %d", groups[0].Count)
+	}
+}
+
+// --- GET /api/images date filters ---
+
+func TestGetImages_DateFromFilter(t *testing.T) {
+	router, database := setupTestRouter(t)
+	seedRouterImageWithDate(t, database, "/photos/early.jpg", "2025-01-15")
+	seedRouterImageWithDate(t, database, "/photos/late.jpg", "2025-06-20")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images?from=2025-06-01", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp PaginatedResponse[db.Image]
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Total != 1 {
+		t.Errorf("expected total 1, got %d", resp.Total)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Filename != "late.jpg" {
+		t.Errorf("expected late.jpg only, got %v", resp.Data)
+	}
+}
+
+func TestGetImages_DateToFilter(t *testing.T) {
+	router, database := setupTestRouter(t)
+	seedRouterImageWithDate(t, database, "/photos/early.jpg", "2025-01-15")
+	seedRouterImageWithDate(t, database, "/photos/late.jpg", "2025-06-20")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images?to=2025-03-01", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp PaginatedResponse[db.Image]
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Total != 1 {
+		t.Errorf("expected total 1, got %d", resp.Total)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Filename != "early.jpg" {
+		t.Errorf("expected early.jpg only, got %v", resp.Data)
+	}
+}
+
+func TestGetImages_DateRangeFilter(t *testing.T) {
+	router, database := setupTestRouter(t)
+	seedRouterImageWithDate(t, database, "/photos/jan.jpg", "2025-01-15")
+	seedRouterImageWithDate(t, database, "/photos/apr.jpg", "2025-04-10")
+	seedRouterImageWithDate(t, database, "/photos/dec.jpg", "2025-12-01")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/images?from=2025-03-01&to=2025-06-30", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp PaginatedResponse[db.Image]
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Total != 1 {
+		t.Errorf("expected total 1, got %d", resp.Total)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Filename != "apr.jpg" {
+		t.Errorf("expected apr.jpg only, got %v", resp.Data)
+	}
+}
+
 // --- GET /api/images sort/order variants ---
 
 func TestGetImages_SortByFilename(t *testing.T) {

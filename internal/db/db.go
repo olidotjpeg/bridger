@@ -280,7 +280,7 @@ func GetDateGroups(db *sql.DB) ([]DateGroup, error) {
 	rows, err := db.Query(`
 		SELECT DATE(capture_date) as date, COUNT(*) as count
 		FROM images
-		WHERE capture_date IS NOT NULL
+		WHERE DATE(capture_date) IS NOT NULL
 		GROUP BY date
 		ORDER BY date DESC
 	`)
