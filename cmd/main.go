@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -24,18 +23,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dir := flag.String("dir", "", "Root directory to scan (overrides config)")
-	dbPath := flag.String("db", cfg.DBPath, "Path to SQLite database")
-	thumbsDir := flag.String("thumbs", cfg.ThumbsPath, "Directory to store thumbnails")
-	flag.Parse()
-
-	if *dir != "" {
-		cfg.ScanDirs = []string{*dir}
-	}
-	cfg.DBPath = *dbPath
-	cfg.ThumbsPath = *thumbsDir
-
-	needsSetup := config.NeedsSetup(cfg) && *dir == ""
+	needsSetup := config.NeedsSetup(cfg)
 
 	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0700); err != nil {
 		log.Fatal(err)

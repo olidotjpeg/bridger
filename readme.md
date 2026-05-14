@@ -4,8 +4,8 @@ A self-hosted photo culling and management tool. Scans a folder of photos, index
 
 ## Requirements
 
-- Go 1.22+
-- Node.js 18+
+- Go 1.25+
+- Node.js 25+
 - [`just`](https://github.com/casey/just) (optional, for the dev/build recipes)
 
 No C compiler or native libraries required — the binary is pure Go (`CGO_ENABLED=0`).
@@ -15,7 +15,7 @@ No C compiler or native libraries required — the binary is pure Go (`CGO_ENABL
 Both the Go server and Vite dev server need to run simultaneously. The `justfile` handles this:
 
 ```bash
-just dev -- --dir /path/to/photos
+just dev
 ```
 
 Or manually:
@@ -39,7 +39,7 @@ just build
 Produces a single `bridger` binary with the frontend embedded. Run it directly:
 
 ```bash
-./bridger --dir /path/to/photos
+./bridger
 ```
 
 ## Data storage
@@ -62,16 +62,6 @@ Three files live there:
 
 To reset Bridger completely, delete the directory. To just re-run the setup wizard, delete `config.json`.
 
-## Flags
-
-CLI flags override the config file and are useful for scripting or one-off runs. Passing `--dir` skips the setup wizard entirely and does **not** modify the config file.
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--dir` | *(from config)* | Root directory to scan for photos |
-| `--db` | *(from config)* | Path to the SQLite database file |
-| `--thumbs` | *(from config)* | Directory to store generated thumbnails |
-
 ## Supported formats
 
 | Format | Extension |
@@ -81,6 +71,7 @@ CLI flags override the config file and are useful for scripting or one-off runs.
 | RAW (Canon) | `.cr2` |
 | RAW (Nikon) | `.nef` |
 | RAW (Sony) | `.arw` |
+| RAW (Fujifilm) | `.raf` |
 
 Extensions are matched case-insensitively.
 
@@ -88,17 +79,19 @@ Extensions are matched case-insensitively.
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `GET` | `/api/images` | List images with pagination, sorting, and rating filter |
+| `GET` | `/api/images` | List images with pagination, sorting, and filtering |
 | `PATCH` | `/api/images/:id` | Update rating and/or tags |
 | `GET` | `/api/images/:id/full` | Serve the full-resolution image |
 | `GET` | `/api/images/:id/tags` | List tags for an image |
 | `GET` | `/api/tags` | List all tags |
 | `POST` | `/api/tags` | Create a new tag |
+| `GET` | `/api/dates` | List distinct capture dates (used by date filter) |
 | `GET` | `/api/scan/status` | Get current scan progress |
 | `POST` | `/api/scan` | Trigger a background re-scan |
 | `GET` | `/api/config` | Get current config and setup state |
 | `PUT` | `/api/config` | Save scan directories and trigger initial scan |
 | `GET` | `/api/fs/list` | List subdirectories at a path (used by setup wizard) |
+| `GET` | `/api/ping` | Health check |
 
 ### Query params for `GET /api/images`
 
@@ -106,9 +99,11 @@ Extensions are matched case-insensitively.
 | --- | --- | --- |
 | `page` | int | Page number (default: 1) |
 | `limit` | int | Results per page (default: 50) |
-| `sort` | string | `capture_date`, `rating`, or `filename` (default: `capture_date`) |
+| `sort` | string | `capture_date` or `rating` (default: `capture_date`) |
 | `order` | string | `asc` or `desc` (default: `desc`) |
 | `rating` | int | Filter by minimum rating |
+| `from` | string | Filter to images on or after this date (`YYYY-MM-DD`) |
+| `to` | string | Filter to images on or before this date (`YYYY-MM-DD`) |
 
 ## Project structure
 
@@ -121,13 +116,15 @@ bridger/
 │   ├── api/               # HTTP handlers and router (Gin)
 │   ├── db/                # Database connection, migrations, and queries
 │   ├── exif/              # EXIF metadata extraction
+│   ├── raw/               # Embedded JPEG preview extraction from RAW files
 │   ├── scanner/           # Scan orchestration and progress tracking
-│   ├── thumbs/            # Thumbnail generation (govips)
-│   └── walker/            # Directory traversal and file filtering
+│   ├── thumbs/            # Thumbnail generation (pure Go, disintegration/imaging)
+│   ├── walker/            # Directory traversal and file filtering
+│   └── watcher/           # fsnotify-based file watcher for live re-indexing
 ├── web/                   # React + TypeScript frontend (Vite)
 │   └── src/
 │       ├── api/           # Fetch wrappers
-│       └── components/    # Gallery, Lightbox, Sidebar, StarRating, TagEditor, BulkActionBar
+│       └── components/    # Gallery, Lightbox, Sidebar, Stars, Tags, BulkActionBar, Cull
 ├── sql/
 │   └── migrations/        # SQL migration files
 ├── bruno/                 # Bruno API collection for manual testing
@@ -139,6 +136,14 @@ bridger/
 ## Releases
 
 Releases are automated via GitHub Actions. To publish a new release:
+
+```bash
+just release        # bump patch (e.g. 0.0.1 → 0.0.2)
+just release minor  # bump minor (e.g. 0.1.0 → 0.2.0)
+just release major  # bump major (e.g. 1.0.0 → 2.0.0)
+```
+
+Or manually:
 
 ```bash
 git tag v1.2.3
