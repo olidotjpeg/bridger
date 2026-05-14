@@ -7,17 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
+
+	"github.com/olidotjpeg/bridger/internal/exif"
 )
 
 type FileInfo struct {
-	Path        string
-	Size        int64
-	FileName    string
-	MimeType    string
-	CaptureDate time.Time
-	Width       int
-	Height      int
+	Path     string
+	Size     int64
+	FileName string
+	MimeType string
+	exif.EXIFData
 }
 
 var mimeTypes = map[string]string{

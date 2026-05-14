@@ -9,29 +9,49 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
 
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - uses: actions/setup-go@v5
       with:
         go-version: '1.26.1'
+    - run: CGO_ENABLED=0 go test -tags dev ./...
 
-    - name: Test
-      run: CGO_ENABLED=0 go test -tags dev ./...
-
-    - name: Build Linux
-      run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/bridger-linux-amd64 ./cmd
-
-    - name: Build Windows
-      run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/bridger-windows-amd64.exe ./cmd
-
-    - name: Build Mac AMD
-      run: CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/bridger-darwin-amd64 ./cmd
-
-    - name: Build Mac ARM
-      run: CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/bridger-darwin-arm64 ./cmd
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            output: bridger-linux-amd64
+          - os: windows
+            arch: amd64
+            output: bridger-windows-amd64.exe
+          - os: darwin
+            arch: amd64
+            output: bridger-darwin-amd64
+          - os: darwin
+            arch: arm64
+            output: bridger-darwin-arm64
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '25'
+    - name: Build frontend
+      run: |
+        cd web
+        npm ci
+        npm run build
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.26.1'
+    - run: CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o dist/${{ matrix.output }} ./cmd

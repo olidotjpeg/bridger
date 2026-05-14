@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Image, Tag } from "../../api/images";
 import { fetchImageTags, patchImage, createTag } from "../../api/images";
@@ -15,6 +15,7 @@ interface LightboxProps {
 
 export default function LightBox({ images, selectedId, onClose, onNavigate }: LightboxProps) {
   const queryClient = useQueryClient()
+  const [exifOpen, setExifOpen] = useState(true)
   const currentIndex = images.findIndex((img) => img.id === selectedId);
   const currentImage = images[currentIndex];
   const prevImage = images[currentIndex - 1];
@@ -76,6 +77,14 @@ export default function LightBox({ images, selectedId, onClose, onNavigate }: Li
 
   if (!currentImage) return null;
 
+  const exifFields = [
+    { label: 'Camera', value: currentImage.camera_model },
+    { label: 'ISO', value: currentImage.iso },
+    { label: 'Aperture', value: currentImage.aperture != null ? `f/${currentImage.aperture}` : null },
+    { label: 'Shutter', value: currentImage.shutter_speed },
+    { label: 'Focal length', value: currentImage.focal_length != null ? `${currentImage.focal_length} mm` : null },
+  ].filter(f => f.value != null && f.value !== '')
+
   const captureDate = currentImage.capture_date
     ? new Date(currentImage.capture_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
@@ -120,6 +129,34 @@ export default function LightBox({ images, selectedId, onClose, onNavigate }: Li
             disabled={mutating}
           />
         </div>
+
+        {exifFields.length > 0 && (
+          <div className="lightbox-exif">
+            <button
+              className="lightbox-exif-toggle"
+              onClick={() => setExifOpen(o => !o)}
+              aria-expanded={exifOpen}
+            >
+              <span>Camera Info</span>
+              <svg
+                className={`lightbox-exif-chevron${exifOpen ? ' open' : ''}`}
+                width="10" height="10" viewBox="0 0 10 10" fill="none"
+              >
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <div className={`lightbox-exif-body${exifOpen ? ' open' : ''}`}>
+              <div className="lightbox-exif-inner">
+                {exifFields.map(({ label, value }) => (
+                  <div key={label} className="lightbox-exif-row">
+                    <span className="lightbox-exif-label">{label}</span>
+                    <span className="lightbox-exif-value">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {nextImage && (

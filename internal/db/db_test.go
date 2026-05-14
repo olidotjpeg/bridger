@@ -485,6 +485,136 @@ func TestPruneStaleEntries_KeepsAll(t *testing.T) {
 	}
 }
 
+// seedImageWithDate inserts an image and sets its capture_date column.
+func seedImageWithDate(t *testing.T, database *sql.DB, path, captureDate string) string {
+	t.Helper()
+	id := seedImage(t, database, path)
+	database.Exec("UPDATE images SET capture_date = ? WHERE id = ?", captureDate, id)
+	return id
+}
+
+// --- GetImagesWithCount date filters ---
+
+func TestGetImagesWithCount_DateFromFilter(t *testing.T) {
+	db := setupTestDB(t)
+	seedImageWithDate(t, db, "/photos/early.jpg", "2025-01-15")
+	seedImageWithDate(t, db, "/photos/late.jpg", "2025-06-20")
+
+	from := "2025-06-01"
+	images, count, err := GetImagesWithCount(db, ImageQuery{Limit: 10, Sort: "filename", Order: "asc", DateFrom: &from})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("expected count 1, got %d", count)
+	}
+	if len(images) != 1 || images[0].Filename != "late.jpg" {
+		t.Errorf("expected late.jpg only, got %v", images)
+	}
+}
+
+func TestGetImagesWithCount_DateToFilter(t *testing.T) {
+	db := setupTestDB(t)
+	seedImageWithDate(t, db, "/photos/early.jpg", "2025-01-15")
+	seedImageWithDate(t, db, "/photos/late.jpg", "2025-06-20")
+
+	to := "2025-03-01"
+	images, count, err := GetImagesWithCount(db, ImageQuery{Limit: 10, Sort: "filename", Order: "asc", DateTo: &to})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("expected count 1, got %d", count)
+	}
+	if len(images) != 1 || images[0].Filename != "early.jpg" {
+		t.Errorf("expected early.jpg only, got %v", images)
+	}
+}
+
+func TestGetImagesWithCount_DateRangeFilter(t *testing.T) {
+	db := setupTestDB(t)
+	seedImageWithDate(t, db, "/photos/jan.jpg", "2025-01-15")
+	seedImageWithDate(t, db, "/photos/apr.jpg", "2025-04-10")
+	seedImageWithDate(t, db, "/photos/dec.jpg", "2025-12-01")
+
+	from, to := "2025-03-01", "2025-06-30"
+	images, count, err := GetImagesWithCount(db, ImageQuery{Limit: 10, Sort: "filename", Order: "asc", DateFrom: &from, DateTo: &to})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("expected count 1, got %d", count)
+	}
+	if len(images) != 1 || images[0].Filename != "apr.jpg" {
+		t.Errorf("expected apr.jpg only, got %v", images)
+	}
+}
+
+func TestGetImagesWithCount_DateAndRatingCombined(t *testing.T) {
+	db := setupTestDB(t)
+	idA := seedImageWithDate(t, db, "/photos/a.jpg", "2025-04-05")
+	seedImageWithDate(t, db, "/photos/b.jpg", "2025-04-05")
+	db.Exec("UPDATE images SET rating = 4 WHERE id = ?", idA)
+
+	from, to := "2025-04-01", "2025-04-30"
+	minRating := 3
+	images, count, err := GetImagesWithCount(db, ImageQuery{
+		Limit: 10, Sort: "filename", Order: "asc",
+		DateFrom: &from, DateTo: &to, MinRating: &minRating,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("expected count 1 (date + rating combined), got %d", count)
+	}
+	if len(images) != 1 || images[0].Filename != "a.jpg" {
+		t.Errorf("expected a.jpg only, got %v", images)
+	}
+}
+
+// --- GetDateGroups ---
+
+func TestGetDateGroups_Empty(t *testing.T) {
+	db := setupTestDB(t)
+	groups, err := GetDateGroups(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if groups == nil {
+		t.Error("expected empty slice, got nil")
+	}
+	if len(groups) != 0 {
+		t.Errorf("expected 0 groups, got %d", len(groups))
+	}
+}
+
+func TestGetDateGroups_WithData(t *testing.T) {
+	db := setupTestDB(t)
+	seedImageWithDate(t, db, "/photos/a.jpg", "2025-04-05")
+	seedImageWithDate(t, db, "/photos/b.jpg", "2025-04-05")
+	seedImageWithDate(t, db, "/photos/c.jpg", "2025-03-01")
+	seedImage(t, db, "/photos/nodate.jpg") // no capture_date — excluded
+
+	groups, err := GetDateGroups(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Errorf("expected 2 date groups (undated excluded), got %d", len(groups))
+	}
+	// Sorted DESC: 2025-04-05 first
+	if groups[0].Date != "2025-04-05" {
+		t.Errorf("expected 2025-04-05 first, got %s", groups[0].Date)
+	}
+	if groups[0].Count != 2 {
+		t.Errorf("expected count 2 for 2025-04-05, got %d", groups[0].Count)
+	}
+	if groups[1].Date != "2025-03-01" {
+		t.Errorf("expected 2025-03-01 second, got %s", groups[1].Date)
+	}
+}
+
 func TestPruneStaleEntries_NoDirs(t *testing.T) {
 	db := setupTestDB(t)
 	seedImage(t, db, "/photos/a.jpg")

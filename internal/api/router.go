@@ -50,6 +50,8 @@ func SetupRouter(db *sql.DB, state *scanner.ScanState, cfg Config) *gin.Engine {
 	api.GET("/tags", getAllTags(db))
 	api.POST("/tags", postNewTag(db))
 
+	api.GET("/dates", getDates(db))
+
 	api.GET("/scan/status", getScanStatus(state))
 	api.POST("/scan", startNewScan(db, state, cfg))
 
@@ -95,12 +97,22 @@ func getImagesInternal(db *sql.DB, cfg Config) gin.HandlerFunc {
 			minRating = &r
 		}
 
+		var dateFrom, dateTo *string
+		if f := c.Query("from"); f != "" {
+			dateFrom = &f
+		}
+		if t := c.Query("to"); t != "" {
+			dateTo = &t
+		}
+
 		q := database.ImageQuery{
 			Limit:     limit,
 			Offset:    offset,
 			Sort:      sort,
 			Order:     order,
 			MinRating: minRating,
+			DateFrom:  dateFrom,
+			DateTo:    dateTo,
 		}
 
 		images, count, _ := database.GetImagesWithCount(db, q)
@@ -168,6 +180,17 @@ func getImageTags(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, tags)
+	}
+}
+
+func getDates(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		groups, err := database.GetDateGroups(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, groups)
 	}
 }
 

@@ -7,21 +7,26 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
 	walk "github.com/olidotjpeg/bridger/internal/walker"
+	_ "modernc.org/sqlite"
 )
 
 type Image struct {
-	Id            int    `json:"id"`
-	FilePath      string `json:"file_path"`
-	Filename      string `json:"filename"`
-	CaptureDate   string `json:"capture_date"`
-	Width         int    `json:"width"`
-	Height        int    `json:"height"`
-	Rating        int    `json:"rating"`
-	MimeType      string `json:"mime_type"`
-	ThumbnailPath string `json:"thumbnail_path"`
-	PreviewPath   string `json:"preview_path,omitempty"`
+	Id            int      `json:"id"`
+	FilePath      string   `json:"file_path"`
+	Filename      string   `json:"filename"`
+	CaptureDate   string   `json:"capture_date"`
+	Width         int      `json:"width"`
+	Height        int      `json:"height"`
+	Rating        int      `json:"rating"`
+	MimeType      string   `json:"mime_type"`
+	ThumbnailPath string   `json:"thumbnail_path"`
+	PreviewPath   string   `json:"preview_path,omitempty"`
+	CameraModel   *string  `json:"camera_model"`
+	ISO           *string  `json:"iso"`
+	Aperture      *float64 `json:"aperture"`
+	ShutterSpeed  *string  `json:"shutter_speed"`
+	FocalLength   *float64 `json:"focal_length"`
 }
 
 type Tag struct {
@@ -89,7 +94,9 @@ func IsConflict(err error) bool {
 type ImageQuery struct {
 	Limit, Offset int
 	Sort, Order   string
-	MinRating     *int // nil = no filter
+	MinRating     *int    // nil = no filter
+	DateFrom      *string // nil = no filter, format "2025-04-05"
+	DateTo        *string // nil = no filter, format "2025-04-07"
 }
 
 func Database(dbPath string) (*sql.DB, error) {
@@ -124,9 +131,22 @@ func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath 
 		action = "updated"
 	}
 
+	nullStr := func(s string) any {
+		if s == "" {
+			return nil
+		}
+		return s
+	}
+	nullF32 := func(f float32) any {
+		if f == 0 {
+			return nil
+		}
+		return f
+	}
+
 	_, err = db.Exec(`
-	INSERT INTO images (file_path, filename, file_size, mime_type, thumbnail_path, preview_path, capture_date, width, height, index_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO images (file_path, filename, file_size, mime_type, thumbnail_path, preview_path, capture_date, width, height, camera_model, iso, aperture, shutter_speed, focal_length, index_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(file_path) DO UPDATE SET
 			file_size      = excluded.file_size,
 			thumbnail_path = excluded.thumbnail_path,
@@ -134,8 +154,15 @@ func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath 
 			capture_date   = excluded.capture_date,
 			width          = excluded.width,
 			height         = excluded.height,
+			camera_model   = excluded.camera_model,
+			iso            = excluded.iso,
+			aperture       = excluded.aperture,
+			shutter_speed  = excluded.shutter_speed,
+			focal_length   = excluded.focal_length,
 			index_at       = excluded.index_at
-	`, filePath.Path, filePath.FileName, filePath.Size, filePath.MimeType, thumbPath, previewPath, filePath.CaptureDate, filePath.Width, filePath.Height, time.Now().UTC())
+	`, filePath.Path, filePath.FileName, filePath.Size, filePath.MimeType, thumbPath, previewPath, filePath.CaptureDate, filePath.Width, filePath.Height,
+		nullStr(filePath.CameraModel), nullStr(filePath.ISO), nullF32(filePath.Aperture), nullStr(filePath.ShutterSpeed), nullF32(filePath.FocalLength),
+		time.Now().UTC())
 
 	if err != nil {
 		log.Printf("error inserting %s: %v", filePath.Path, err)
@@ -149,11 +176,23 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 	var images []Image
 	var count int
 
-	where := ""
+	var conditions []string
 	var args []any
 	if q.MinRating != nil {
-		where = "WHERE rating >= ?"
+		conditions = append(conditions, "rating >= ?")
 		args = append(args, *q.MinRating)
+	}
+	if q.DateFrom != nil {
+		conditions = append(conditions, "DATE(capture_date) >= ?")
+		args = append(args, *q.DateFrom)
+	}
+	if q.DateTo != nil {
+		conditions = append(conditions, "DATE(capture_date) <= ?")
+		args = append(args, *q.DateTo)
+	}
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
 	err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM images %s", where), args...).Scan(&count)
@@ -162,7 +201,7 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 	}
 
 	query := fmt.Sprintf(
-		"SELECT id, file_path, filename, capture_date, width, height, rating, mime_type, thumbnail_path, COALESCE(preview_path, '') FROM images %s ORDER BY %s %s NULLS LAST LIMIT ? OFFSET ?",
+		"SELECT id, file_path, filename, capture_date, width, height, rating, mime_type, thumbnail_path, COALESCE(preview_path, ''), camera_model, iso, aperture, shutter_speed, focal_length FROM images %s ORDER BY %s %s NULLS LAST LIMIT ? OFFSET ?",
 		where, q.Sort, q.Order,
 	)
 	rows, err := db.Query(query, append(args, q.Limit, q.Offset)...)
@@ -173,7 +212,7 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 
 	for rows.Next() {
 		var img Image
-		if err := rows.Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath, &img.PreviewPath); err != nil {
+		if err := rows.Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath, &img.PreviewPath, &img.CameraModel, &img.ISO, &img.Aperture, &img.ShutterSpeed, &img.FocalLength); err != nil {
 			return nil, 0, err
 		}
 		images = append(images, img)
@@ -225,11 +264,40 @@ func PatchImagesWithRatingOrTag(db *sql.DB, id string, input PatchImageInput) (I
 
 	var img Image
 	err = db.QueryRow(
-		"SELECT id, file_path, filename, capture_date, width, height, rating, mime_type, thumbnail_path FROM images WHERE id = ?",
+		"SELECT id, file_path, filename, capture_date, width, height, rating, mime_type, thumbnail_path, camera_model, iso, aperture, shutter_speed, focal_length FROM images WHERE id = ?",
 		id,
-	).Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath)
+	).Scan(&img.Id, &img.FilePath, &img.Filename, &img.CaptureDate, &img.Width, &img.Height, &img.Rating, &img.MimeType, &img.ThumbnailPath, &img.CameraModel, &img.ISO, &img.Aperture, &img.ShutterSpeed, &img.FocalLength)
 
 	return img, err
+}
+
+type DateGroup struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+func GetDateGroups(db *sql.DB) ([]DateGroup, error) {
+	rows, err := db.Query(`
+		SELECT DATE(capture_date) as date, COUNT(*) as count
+		FROM images
+		WHERE DATE(capture_date) IS NOT NULL
+		GROUP BY date
+		ORDER BY date DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	groups := []DateGroup{}
+	for rows.Next() {
+		var g DateGroup
+		if err := rows.Scan(&g.Date, &g.Count); err != nil {
+			return nil, err
+		}
+		groups = append(groups, g)
+	}
+	return groups, nil
 }
 
 // PruneStaleEntries removes rows whose file_path is under one of the given

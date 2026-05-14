@@ -4,6 +4,7 @@ import "./Gallery.css"
 
 interface GalleryListProps {
     images: Image[] | null;
+    groupByDate: boolean;
     selectedId: number | null;
     selectedIds: Set<number>;
     onSelectId: (id: number) => void;
@@ -15,6 +16,7 @@ interface GalleryListProps {
 
 export default function GalleryList({
     images,
+    groupByDate,
     selectedId,
     selectedIds,
     onSelectId,
@@ -69,25 +71,59 @@ export default function GalleryList({
         }
     }
 
+    function renderTile(image: Image, index: number) {
+        return (
+            <li
+                key={image.id}
+                className={[
+                    selectedId === image.id ? 'active' : '',
+                    selectedIds.has(image.id) ? 'selected' : '',
+                    lastSelectedIndex === index ? 'cursor' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={e => handleClick(e, image.id, index)}
+            >
+                <img src={image.thumbnail_path} alt={image.filename} />
+                {selectedIds.has(image.id) && <span className="gallery-check">✓</span>}
+                {image.rating > 0 && (
+                    <span className="gallery-rating">{'★'.repeat(image.rating)}</span>
+                )}
+            </li>
+        )
+    }
+
+    if (!groupByDate) {
+        return (
+            <ul className="gallery" ref={listRef}>
+                {images.map((image, index) => renderTile(image, index))}
+            </ul>
+        )
+    }
+
+    // Group by YYYY-MM-DD (date part of capture_date)
+    const groups = new Map<string, { images: Image[]; startIndex: number }>()
+    let runningIndex = 0
+    for (const image of images) {
+        const date = image.capture_date ? image.capture_date.slice(0, 10) : 'Unknown'
+        if (!groups.has(date)) {
+            groups.set(date, { images: [], startIndex: runningIndex })
+        }
+        groups.get(date)!.images.push(image)
+        runningIndex++
+    }
+
     return (
-        <ul className="gallery" ref={listRef}>
-            {images.map((image, index) => (
-                <li
-                    key={image.id}
-                    className={[
-                        selectedId === image.id ? 'active' : '',
-                        selectedIds.has(image.id) ? 'selected' : '',
-                        lastSelectedIndex === index ? 'cursor' : '',
-                    ].filter(Boolean).join(' ')}
-                    onClick={e => handleClick(e, image.id, index)}
-                >
-                    <img src={image.thumbnail_path} alt={image.filename} />
-                    {selectedIds.has(image.id) && <span className="gallery-check">✓</span>}
-                    {image.rating > 0 && (
-                        <span className="gallery-rating">{'★'.repeat(image.rating)}</span>
-                    )}
-                </li>
+        <div className="gallery-grouped">
+            {Array.from(groups.entries()).map(([date, group]) => (
+                <section key={date} className="gallery-date-group">
+                    <h2 className="gallery-date-header">
+                        {date === 'Unknown' ? 'Unknown date' : new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        <span className="gallery-date-count">{group.images.length}</span>
+                    </h2>
+                    <ul className="gallery">
+                        {group.images.map((image, i) => renderTile(image, group.startIndex + i))}
+                    </ul>
+                </section>
             ))}
-        </ul>
+        </div>
     )
 }

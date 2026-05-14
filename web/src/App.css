@@ -7,10 +7,54 @@
 .app-sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
-
   background: var(--surface);
   border-right: 1px solid var(--border-subtle);
   overflow-y: auto;
+  transition: width 0.2s ease;
+}
+
+.app-sidebar--cull {
+  width: 52px;
+  overflow: hidden;
+}
+
+.cull-sidebar-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 16px 0 20px;
+  gap: 16px;
+}
+
+.cull-sidebar-strip .sidebar-logo {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-hover);
+  padding: 0;
+  border: none;
+  margin: 0;
+  user-select: none;
+}
+
+.cull-strip-exit {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.cull-strip-exit:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
 }
 
 .app-main {
