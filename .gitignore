@@ -1,6 +1,7 @@
 # Binary output
 tmp/
 cmd/main/
+cmd/web
 
 # Database
 *.db
