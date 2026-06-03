@@ -32,9 +32,6 @@ jobs:
             platform: windows/amd64
             output: bridger-windows-amd64.exe
           - runner: macos-latest
-            platform: darwin/amd64
-            output: bridger-darwin-amd64
-          - runner: macos-latest
             platform: darwin/arm64
             output: bridger-darwin-arm64
     runs-on: ${{ matrix.runner }}
