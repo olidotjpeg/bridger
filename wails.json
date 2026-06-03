@@ -1,0 +1,22 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Bridger",
+  "outputfilename": "Bridger",
+  "frontend:dir": "web",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "wailsVersion": "v2.9.2",
+  "version": "2",
+  "info": {
+    "companyName": "",
+    "productName": "Bridger",
+    "productVersion": "1.0.0",
+    "copyright": "",
+    "comments": "Self-hosted photo culling and management"
+  },
+  "nsisType": "multiple",
+  "obfuscated": false,
+  "garbleargs": ""
+}

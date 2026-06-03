@@ -60,7 +60,7 @@ function App() {
   const { data: scanStatus } = useQuery({
     queryKey: ['scan-status'],
     queryFn: fetchScanStatus,
-    refetchInterval: (query) => query.state.data?.running ? 2000 : false,
+    refetchInterval: (query) => query.state.data?.running ? 2000 : 5000,
   })
 
   const scanMutation = useMutation({
@@ -71,6 +71,9 @@ function App() {
   })
 
   const totalPages = Math.ceil((data?.total ?? 0) / (data?.limit ?? 50))
+
+  const [initialScanPending, setInitialScanPending] = useState(true)
+  const isIndexing = initialScanPending && (data?.total ?? 0) === 0
 
   const bulkRatingMutation = useMutation({
     mutationFn: async (rating: number) => {
@@ -155,14 +158,19 @@ function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [selectedIds, selectedId])
 
-  // Invalidate images query once scan finishes (running flips from true → false)
-  const wasRunning = scanStatus?.running
   useEffect(() => {
-    if (wasRunning === false) {
+    const runtime = (window as any).runtime
+    if (!runtime?.EventsOn) {
+      setInitialScanPending(false)
+      return
+    }
+    return runtime.EventsOn('scan:done', () => {
+      setInitialScanPending(false)
       queryClient.invalidateQueries({ queryKey: ['images'] })
       queryClient.invalidateQueries({ queryKey: ['images-all'] })
-    }
-  }, [wasRunning])
+      queryClient.invalidateQueries({ queryKey: ['scan-status'] })
+    })
+  }, [])
 
   if (configLoading) return <div className="status-message">Starting…</div>
   if (appConfig?.needs_setup) return <Setup config={appConfig} onComplete={handleSetupComplete} />
@@ -203,7 +211,16 @@ function App() {
           <>
             {(isLoading || allImagesLoading) && <div className="status-message">Loading...</div>}
             {(isError || allImagesError) && <div className="status-message error">Failed to load images</div>}
-            {(() => {
+            {isIndexing && (
+              <div className="gallery-container">
+                <div className="gallery-skeleton">
+                  {Array.from({ length: 16 }).map((_, i) => (
+                    <div key={i} className="gallery-skeleton-tile" />
+                  ))}
+                </div>
+              </div>
+            )}
+            {!isIndexing && (() => {
               const images = groupByDate ? allImages ?? null : data?.data ?? null
               return images && (
                 <div className="gallery-container">
@@ -223,9 +240,16 @@ function App() {
             })()}
             {!groupByDate && (
               <div className="pagination">
-                <button onClick={() => setPage(p => p - 1)} disabled={page === 1}>← Prev</button>
-                <span className="page-info">Page {page} of {totalPages}</span>
-                <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}>Next →</button>
+                <button onClick={() => setPage(p => p - 1)} disabled={page === 1 || isIndexing}>← Prev</button>
+                {isIndexing ? (
+                  <span className="indexing-status">
+                    <span className="indexing-dot" />
+                    Indexing…
+                  </span>
+                ) : (
+                  <span className="page-info">Page {page} of {totalPages}</span>
+                )}
+                <button onClick={() => setPage(p => p + 1)} disabled={page >= totalPages || isIndexing}>Next →</button>
               </div>
             )}
           </>

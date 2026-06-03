@@ -5,17 +5,6 @@ export interface AppConfig {
   thumbs_path: string
 }
 
-export interface DirEntry {
-  name: string
-  path: string
-}
-
-export interface DirListing {
-  path: string
-  parent: string
-  entries: DirEntry[]
-}
-
 export async function fetchConfig(): Promise<AppConfig> {
   const res = await fetch('/api/config')
   if (!res.ok) throw new Error('Failed to fetch config')
@@ -34,9 +23,3 @@ export async function saveConfig(scanDirs: string[]): Promise<void> {
   }
 }
 
-export async function listDirectory(path?: string): Promise<DirListing> {
-  const url = path ? `/api/fs/list?path=${encodeURIComponent(path)}` : '/api/fs/list'
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Failed to list directory')
-  return res.json()
-}

@@ -34,7 +34,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
 
-	if err := db.RunMigrations(database, migrationsPath); err != nil {
+	if err := db.RunMigrations(database, os.DirFS(migrationsPath)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -46,6 +46,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 		NeedsSetup: false,
 		CurrentCfg: cfg,
 		ReconfigCh: reconfigCh,
+		SaveConfig: func(*config.Config) error { return nil },
 	})
 
 	t.Cleanup(func() { database.Close() })
@@ -764,7 +765,7 @@ func TestPutConfig_ValidDir(t *testing.T) {
 
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
-	if err := db.RunMigrations(database, migrationsPath); err != nil {
+	if err := db.RunMigrations(database, os.DirFS(migrationsPath)); err != nil {
 		t.Fatal(err)
 	}
 

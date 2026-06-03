@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -29,6 +28,7 @@ type Config struct {
 	NeedsSetup bool
 	CurrentCfg *config.Config
 	ReconfigCh chan<- config.Config
+	SaveConfig func(*config.Config) error // defaults to config.Save if nil
 }
 
 func SetupRouter(db *sql.DB, state *scanner.ScanState, cfg Config) *gin.Engine {
@@ -57,7 +57,6 @@ func SetupRouter(db *sql.DB, state *scanner.ScanState, cfg Config) *gin.Engine {
 
 	api.GET("/config", getConfig(&cfg))
 	api.PUT("/config", putConfig(&cfg))
-	api.GET("/fs/list", listDirectory)
 
 	return router
 }
@@ -293,7 +292,11 @@ func putConfig(cfg *Config) gin.HandlerFunc {
 		}
 
 		cfg.CurrentCfg.ScanDirs = body.ScanDirs
-		if err := config.Save(cfg.CurrentCfg); err != nil {
+		saveFn := cfg.SaveConfig
+		if saveFn == nil {
+			saveFn = config.Save
+		}
+		if err := saveFn(cfg.CurrentCfg); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to save config"})
 			return
 		}
@@ -305,69 +308,6 @@ func putConfig(cfg *Config) gin.HandlerFunc {
 	}
 }
 
-type dirEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-
-func listDirectory(c *gin.Context) {
-	reqPath := c.Query("path")
-	if reqPath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "could not determine home directory"})
-			return
-		}
-		reqPath = home
-	}
-
-	// Resolve to absolute path and clean it
-	abs, err := filepath.Abs(reqPath)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invalid path"})
-		return
-	}
-
-	info, err := os.Stat(abs)
-	if err != nil || !info.IsDir() {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "path is not a directory"})
-		return
-	}
-
-	entries, err := os.ReadDir(abs)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "could not read directory"})
-		return
-	}
-
-	var dirs []dirEntry
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		if strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		dirs = append(dirs, dirEntry{
-			Name: e.Name(),
-			Path: filepath.Join(abs, e.Name()),
-		})
-	}
-	sort.Slice(dirs, func(i, j int) bool {
-		return strings.ToLower(dirs[i].Name) < strings.ToLower(dirs[j].Name)
-	})
-
-	parent := filepath.Dir(abs)
-	if parent == abs {
-		parent = "" // at filesystem root
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"path":    abs,
-		"parent":  parent,
-		"entries": dirs,
-	})
-}
 
 func getScanStatus(state *scanner.ScanState) gin.HandlerFunc {
 	return func(c *gin.Context) {

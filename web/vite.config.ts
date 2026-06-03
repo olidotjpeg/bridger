@@ -6,12 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-        '/api': 'http://localhost:8080',
-        '/thumbs': 'http://localhost:8080',
+      '/api': 'http://localhost:8080',
+      '/thumbs': 'http://localhost:8080',
     }
   },
   build: {
-    outDir: "../cmd/web/dist",
+    outDir: "dist",
     emptyOutDir: true
   }
 })
