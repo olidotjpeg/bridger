@@ -21,6 +21,7 @@ jobs:
     - run: CGO_ENABLED=0 go test -tags dev ./internal/...
 
   build:
+    if: github.event_name == 'push'
     needs: test
     strategy:
       matrix:
@@ -31,9 +32,6 @@ jobs:
           - runner: windows-latest
             platform: windows/amd64
             output: bridger-windows-amd64.exe
-          - runner: macos-latest
-            platform: darwin/amd64
-            output: bridger-darwin-amd64
           - runner: macos-latest
             platform: darwin/arm64
             output: bridger-darwin-arm64
