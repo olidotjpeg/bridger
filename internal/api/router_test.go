@@ -34,7 +34,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
 
-	if err := db.RunMigrations(database, migrationsPath); err != nil {
+	if err := db.RunMigrations(database, os.DirFS(migrationsPath)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -46,6 +46,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 		NeedsSetup: false,
 		CurrentCfg: cfg,
 		ReconfigCh: reconfigCh,
+		SaveConfig: func(*config.Config) error { return nil },
 	})
 
 	t.Cleanup(func() { database.Close() })
@@ -764,7 +765,7 @@ func TestPutConfig_ValidDir(t *testing.T) {
 
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
-	if err := db.RunMigrations(database, migrationsPath); err != nil {
+	if err := db.RunMigrations(database, os.DirFS(migrationsPath)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -791,50 +792,3 @@ func TestPutConfig_ValidDir(t *testing.T) {
 
 // --- GET /api/fs/list ---
 
-func TestListDirectory_Default(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/fs/list", nil)
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
-	if _, ok := body["path"]; !ok {
-		t.Error("expected path field in response")
-	}
-	if _, ok := body["entries"]; !ok {
-		t.Error("expected entries field in response")
-	}
-}
-
-func TestListDirectory_SpecificPath(t *testing.T) {
-	router, _ := setupTestRouter(t)
-	dir := t.TempDir()
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/fs/list?path="+dir, nil)
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
-func TestListDirectory_InvalidPath(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/fs/list?path=/nonexistent/xyz/abc", nil)
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}

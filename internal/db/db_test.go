@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -20,7 +21,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
 
-	if err := RunMigrations(db, migrationsPath); err != nil {
+	if err := RunMigrations(db, os.DirFS(migrationsPath)); err != nil {
 		t.Fatal(err)
 	}
 
