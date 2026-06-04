@@ -133,6 +133,42 @@ bridger/
 └── ideas.md               # Feature backlog
 ```
 
+## Build from source
+
+**Prerequisites:** Go 1.25+, Node.js 22+, [`just`](https://github.com/casey/just)
+
+```bash
+git clone https://github.com/olidotjpeg/bridger.git
+cd bridger
+just build
+```
+
+The binary is output to `build/bin/Bridger` (or `Bridger.exe` on Windows). Run it directly:
+
+```bash
+./build/bin/Bridger
+```
+
+## Installation
+
+Bridger is not code-signed, so both macOS and Windows will warn you on first launch.
+
+**macOS** — remove the quarantine flag in Terminal:
+
+```bash
+xattr -cr Bridger.app
+```
+
+Then open it normally.
+
+**Windows** — right-click the `.exe` → **Properties** → check **Unblock** → **OK**.
+
+Or in PowerShell:
+
+```powershell
+Unblock-File .\Bridger-Windows-amd64.exe
+```
+
 ## Releases
 
 Releases are automated via GitHub Actions. To publish a new release:
