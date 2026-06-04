@@ -66,11 +66,11 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
-  scan:
+  release:
     needs: build
     runs-on: ubuntu-latest
-    outputs:
-      analysis: ${{ steps.vt.outputs.analysis }}
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/download-artifact@v4
@@ -85,33 +85,23 @@ jobs:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           files: dist/*
 
-  release:
-    needs: scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-          path: dist/
-
-      - name: Format VirusTotal results
-        id: vt_body
+      - name: Build release body
+        id: body
+        env:
+          ANALYSIS: ${{ steps.vt.outputs.analysis }}
         run: |
-          body="## VirusTotal scan results"$'\n'
-          while IFS= read -r line; do
-            file=$(echo "$line" | cut -d'=' -f1)
-            url=$(echo "$line" | cut -d'=' -f2)
-            body+="- [$file]($url)"$'\n'
-          done <<< "${{ needs.scan.outputs.analysis }}"
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$body" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo 'content<<EOF'
+            echo '## VirusTotal Scan Results'
+            echo ''
+            while IFS='=' read -r file url; do
+              [ -n "$file" ] && echo "- [$file]($url)"
+            done <<< "$ANALYSIS"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
-          body: ${{ steps.vt_body.outputs.body }}
+          body: ${{ steps.body.outputs.content }}
