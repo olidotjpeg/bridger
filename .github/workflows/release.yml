@@ -94,9 +94,11 @@ jobs:
             echo 'content<<EOF'
             echo '## VirusTotal Scan Results'
             echo ''
-            while IFS='=' read -r file url; do
-              [ -n "$file" ] && echo "- [$file]($url)"
-            done <<< "$ANALYSIS"
+            echo "$ANALYSIS" | tr ',' '\n' | while read -r entry; do
+              file="${entry%%=*}"
+              url="${entry#*=}"
+              [ -n "$file" ] && echo "- [${file#dist/}]($url)"
+            done
             echo 'EOF'
           } >> $GITHUB_OUTPUT
 
