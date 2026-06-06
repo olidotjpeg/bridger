@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTags } from '../../api/images'
 import type { Tag } from '../../api/images'
+import { useClickOutside } from '../../hooks/useClickOutside'
 import './TagEditor.css'
 
 interface TagEditorProps {
@@ -30,15 +31,7 @@ export default function TagEditor({ tags, onAdd, onRemove, onCreateAndAdd, disab
   const exactMatch = allTags.some(t => t.name.toLowerCase() === input.toLowerCase())
   const showCreate = input.trim().length > 0 && !exactMatch
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  useClickOutside(containerRef, () => setOpen(false))
 
   function handleSelect(tag: Tag) {
     onAdd(tag)

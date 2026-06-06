@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Image } from '../../api/images'
 import { patchImage } from '../../api/images'
+import { formatCaptureDate, buildExifParts } from '../../utils/format'
 import StarRating from '../stars/StarRating'
 import './CullMode.css'
 
@@ -68,6 +69,9 @@ export default function CullMode({ images, onExit }: CullModeProps) {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
+  // `rate` is excluded from deps intentionally: it closes over `ratingOverrides` which
+  // changes on every key press, causing the handler to re-register after each rating.
+  // `currentImage?.id` in deps correctly re-registers when the active image changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.length, onExit, currentImage?.id])
 
@@ -80,19 +84,8 @@ export default function CullMode({ images, onExit }: CullModeProps) {
     )
   }
 
-  const exifParts = [
-    currentImage.camera_model,
-    currentImage.iso ? `ISO ${currentImage.iso}` : null,
-    currentImage.aperture != null ? `f/${currentImage.aperture}` : null,
-    currentImage.shutter_speed,
-    currentImage.focal_length != null ? `${currentImage.focal_length}mm` : null,
-  ].filter(Boolean)
-
-  const captureDate = currentImage.capture_date
-    ? new Date(currentImage.capture_date).toLocaleDateString('en-GB', {
-        day: 'numeric', month: 'short', year: 'numeric',
-      })
-    : null
+  const exifParts = buildExifParts(currentImage)
+  const captureDate = formatCaptureDate(currentImage.capture_date)
 
   return (
     <div className="cull-mode">

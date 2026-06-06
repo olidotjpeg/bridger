@@ -16,7 +16,6 @@ export default function Setup({ config, onComplete }: SetupProps) {
   const [step, setStep] = useState<Step>('welcome')
   const [folders, setFolders] = useState<string[]>([])
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [noImagesWarning, setNoImagesWarning] = useState(false)
 
   const saveMutation = useMutation({
     mutationFn: () => saveConfig(folders),
@@ -31,19 +30,15 @@ export default function Setup({ config, onComplete }: SetupProps) {
     refetchInterval: step === 'scanning' ? 2000 : false,
   })
 
+  const noImagesWarning = step === 'scanning' && scanStatus != null && !scanStatus.running && scanStatus.total === 0
+
   useEffect(() => {
     if (step !== 'scanning' || !scanStatus) return
-    if (!scanStatus.running) {
-      if (scanStatus.total === 0) {
-        setNoImagesWarning(true)
-      } else {
-        onComplete()
-      }
-    }
+    if (!scanStatus.running && scanStatus.total > 0) onComplete()
   }, [scanStatus, step, onComplete])
 
   async function pickFolder() {
-    const path: string = await (window as any).go.main.App.PickFolder()
+    const path: string = await window.go!.main.App.PickFolder()
     if (path) {
       setFolders(prev => prev.includes(path) ? prev : [...prev, path])
     }

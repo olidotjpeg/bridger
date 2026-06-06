@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchDates } from '../../api/images'
 import './CullPicker.css'
@@ -35,18 +35,10 @@ export default function CullPicker({ totalImages, onStart, onCancel }: CullPicke
 
   const dateSet = useMemo(() => new Set(dates.map(d => d.date)), [dates])
 
-  const [viewYear, setViewYear] = useState(new Date().getFullYear())
-  const [viewMonth, setViewMonth] = useState(new Date().getMonth())
-  const [seeded, setSeeded] = useState(false)
-
-  // Jump to most recent month with photos once data loads
-  useEffect(() => {
-    if (!seeded && dates.length > 0) {
-      setViewYear(parseInt(dates[0].date.slice(0, 4)))
-      setViewMonth(parseInt(dates[0].date.slice(5, 7)) - 1)
-      setSeeded(true)
-    }
-  }, [dates, seeded])
+  // null = auto-follow most recent date with photos; non-null = user explicitly navigated
+  const [manualView, setManualView] = useState<{ year: number; month: number } | null>(null)
+  const viewYear = manualView?.year ?? (dates.length > 0 ? parseInt(dates[0].date.slice(0, 4)) : new Date().getFullYear())
+  const viewMonth = manualView?.month ?? (dates.length > 0 ? parseInt(dates[0].date.slice(5, 7)) - 1 : new Date().getMonth())
 
   const [anchor, setAnchor] = useState<string | null>(null)
   const [tip, setTip] = useState<string | null>(null)
@@ -78,12 +70,14 @@ export default function CullPicker({ totalImages, onStart, onCancel }: CullPicke
   }
 
   function prevMonth() {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
-    else setViewMonth(m => m - 1)
+    const newMonth = viewMonth === 0 ? 11 : viewMonth - 1
+    const newYear = viewMonth === 0 ? viewYear - 1 : viewYear
+    setManualView({ year: newYear, month: newMonth })
   }
   function nextMonth() {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
-    else setViewMonth(m => m + 1)
+    const newMonth = viewMonth === 11 ? 0 : viewMonth + 1
+    const newYear = viewMonth === 11 ? viewYear + 1 : viewYear
+    setManualView({ year: newYear, month: newMonth })
   }
 
   function dayClass(dateStr: string): string {
