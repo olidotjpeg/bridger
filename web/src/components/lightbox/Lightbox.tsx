@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Image, Tag } from "../../api/images";
 import { fetchImageTags, patchImage, createTag } from "../../api/images";
+import { formatCaptureDate, buildExifFields } from "../../utils/format";
 import StarRating from "../stars/StarRating";
 import TagEditor from "../tags/TagEditor";
 import "./Lightbox.css";
@@ -73,21 +74,12 @@ export default function LightBox({ images, selectedId, onClose, onNavigate }: Li
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose, onNavigate, prevImage, nextImage, selectedId]);
+  }, [onClose, onNavigate, prevImage, nextImage, selectedId, ratingMutation]);
 
   if (!currentImage) return null;
 
-  const exifFields = [
-    { label: 'Camera', value: currentImage.camera_model },
-    { label: 'ISO', value: currentImage.iso },
-    { label: 'Aperture', value: currentImage.aperture != null ? `f/${currentImage.aperture}` : null },
-    { label: 'Shutter', value: currentImage.shutter_speed },
-    { label: 'Focal length', value: currentImage.focal_length != null ? `${currentImage.focal_length} mm` : null },
-  ].filter(f => f.value != null && f.value !== '')
-
-  const captureDate = currentImage.capture_date
-    ? new Date(currentImage.capture_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-    : null;
+  const exifFields = buildExifFields(currentImage)
+  const captureDate = formatCaptureDate(currentImage.capture_date)
 
   const mutating = ratingMutation.isPending || tagsMutation.isPending
 

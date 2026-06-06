@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchTags } from '../../api/images'
 import type { Tag } from '../../api/images'
+import { useClickOutside } from '../../hooks/useClickOutside'
 import './BulkActionBar.css'
 
 interface BulkActionBarProps {
@@ -14,6 +15,9 @@ interface BulkActionBarProps {
 export default function BulkActionBar({ count, onSetRating, onAddTag, onClear }: BulkActionBarProps) {
   const [tagInput, setTagInput] = useState('')
   const [tagOpen, setTagOpen] = useState(false)
+  const tagWrapperRef = useRef<HTMLDivElement>(null)
+
+  useClickOutside(tagWrapperRef, () => setTagOpen(false))
 
   const { data: allTags = [] } = useQuery({
     queryKey: ['tags'],
@@ -38,14 +42,13 @@ export default function BulkActionBar({ count, onSetRating, onAddTag, onClear }:
       </div>
 
       <div className="bulk-bar-center">
-        <div className="bulk-tag-wrapper">
+        <div className="bulk-tag-wrapper" ref={tagWrapperRef}>
           <input
             className="bulk-tag-input"
             placeholder="Tag all…"
             value={tagInput}
             onChange={e => { setTagInput(e.target.value); setTagOpen(true) }}
             onFocus={() => setTagOpen(true)}
-            onBlur={() => setTimeout(() => setTagOpen(false), 150)}
             onKeyDown={e => {
               e.stopPropagation()
               if (e.key === 'Escape') { setTagInput(''); setTagOpen(false) }

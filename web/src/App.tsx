@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+
+const SCAN_POLL_ACTIVE = 2000  // fast poll while a scan is running
+const SCAN_POLL_IDLE = 5000    // slow poll between scans
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import GalleryList from './components/gallery/GalleryList'
 import LightBox from './components/lightbox/Lightbox'
@@ -39,13 +42,13 @@ function App() {
   const [cullDateFrom, setCullDateFrom] = useState<string | undefined>(undefined)
   const [cullDateTo, setCullDateTo] = useState<string | undefined>(undefined)
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['images', page, sort, order, minRating],
     queryFn: () => fetchImages({ page, sort, order, minRating }),
     enabled: !groupByDate,
   })
 
-  const { data: allImages, isLoading: allImagesLoading, isError: allImagesError } = useQuery({
+  const { data: allImages, isLoading: allImagesLoading, isError: allImagesError, error: allImagesErrorDetail } = useQuery({
     queryKey: ['images-all', sort, order, minRating],
     queryFn: () => fetchAllImages({ sort, order, minRating }),
     enabled: groupByDate,
@@ -60,7 +63,7 @@ function App() {
   const { data: scanStatus } = useQuery({
     queryKey: ['scan-status'],
     queryFn: fetchScanStatus,
-    refetchInterval: (query) => query.state.data?.running ? 2000 : 5000,
+    refetchInterval: (query) => query.state.data?.running ? SCAN_POLL_ACTIVE : SCAN_POLL_IDLE,
   })
 
   const scanMutation = useMutation({
@@ -72,7 +75,7 @@ function App() {
 
   const totalPages = Math.ceil((data?.total ?? 0) / (data?.limit ?? 50))
 
-  const [initialScanPending, setInitialScanPending] = useState(true)
+  const [initialScanPending, setInitialScanPending] = useState(() => !!window.runtime?.EventsOn)
   const isIndexing = initialScanPending && (data?.total ?? 0) === 0
 
   const bulkRatingMutation = useMutation({
@@ -156,21 +159,18 @@ function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [selectedIds, selectedId])
+  }, [selectedIds, selectedId, bulkRatingMutation])
 
   useEffect(() => {
-    const runtime = (window as any).runtime
-    if (!runtime?.EventsOn) {
-      setInitialScanPending(false)
-      return
-    }
+    const runtime = window.runtime
+    if (!runtime?.EventsOn) return
     return runtime.EventsOn('scan:done', () => {
       setInitialScanPending(false)
       queryClient.invalidateQueries({ queryKey: ['images'] })
       queryClient.invalidateQueries({ queryKey: ['images-all'] })
       queryClient.invalidateQueries({ queryKey: ['scan-status'] })
     })
-  }, [])
+  }, [queryClient])
 
   if (configLoading) return <div className="status-message">Starting…</div>
   if (appConfig?.needs_setup) return <Setup config={appConfig} onComplete={handleSetupComplete} />
@@ -210,7 +210,11 @@ function App() {
         ) : (
           <>
             {(isLoading || allImagesLoading) && <div className="status-message">Loading...</div>}
-            {(isError || allImagesError) && <div className="status-message error">Failed to load images</div>}
+            {(isError || allImagesError) && (
+              <div className="status-message error">
+                {error?.message ?? allImagesErrorDetail?.message ?? 'Failed to load images'}
+              </div>
+            )}
             {isIndexing && (
               <div className="gallery-container">
                 <div className="gallery-skeleton">

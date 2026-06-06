@@ -51,7 +51,7 @@ export default function GalleryList({
     }, [images, selectedId, lastSelectedIndex, onToggleSelect, onSetLastSelectedIndex])
 
     if (!images) {
-        return "No images arrived"
+        return <div className="status-message">No images found</div>
     }
 
     function handleClick(e: React.MouseEvent, imageId: number, index: number) {

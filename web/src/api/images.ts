@@ -35,6 +35,8 @@ export interface ImageParams {
   dateTo?: string
 }
 
+const FETCH_ALL_LIMIT = '9999'
+
 export async function fetchImages(params: ImageParams): Promise<ImagesResponse> {
   const query = new URLSearchParams({ page: String(params.page), limit: '50' })
   if (params.sort) query.set('sort', params.sort)
@@ -42,19 +44,19 @@ export async function fetchImages(params: ImageParams): Promise<ImagesResponse> 
   if (params.minRating !== undefined) query.set('rating', String(params.minRating))
 
   const res = await fetch(`/api/images?${query}`)
-  if (!res.ok) throw new Error('Failed to fetch images')
+  if (!res.ok) throw new Error(`Failed to fetch images (${res.status})`)
   return res.json()
 }
 
 export async function fetchImageTags(id: number): Promise<Tag[]> {
   const res = await fetch(`/api/images/${id}/tags`)
-  if (!res.ok) throw new Error('Failed to fetch image tags')
+  if (!res.ok) throw new Error(`Failed to fetch image tags (${res.status})`)
   return res.json()
 }
 
 export async function fetchTags(): Promise<Tag[]> {
   const res = await fetch('/api/tags')
-  if (!res.ok) throw new Error('Failed to fetch tags')
+  if (!res.ok) throw new Error(`Failed to fetch tags (${res.status})`)
   return res.json()
 }
 
@@ -64,7 +66,7 @@ export async function patchImage(id: number, updates: { rating?: number; tags?: 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   })
-  if (!res.ok) throw new Error('Failed to update image')
+  if (!res.ok) throw new Error(`Failed to update image (${res.status})`)
   return res.json()
 }
 
@@ -74,7 +76,7 @@ export async function createTag(name: string): Promise<Tag> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   })
-  if (!res.ok) throw new Error('Failed to create tag')
+  if (!res.ok) throw new Error(`Failed to create tag (${res.status})`)
   return res.json()
 }
 
@@ -87,13 +89,13 @@ export interface ScanStatus {
 
 export async function fetchScanStatus(): Promise<ScanStatus> {
   const res = await fetch('/api/scan/status')
-  if (!res.ok) throw new Error('Failed to fetch scan status')
+  if (!res.ok) throw new Error(`Failed to fetch scan status (${res.status})`)
   return res.json()
 }
 
 export async function triggerScan(): Promise<void> {
   const res = await fetch('/api/scan', { method: 'POST' })
-  if (!res.ok && res.status !== 409) throw new Error('Failed to start scan')
+  if (!res.ok && res.status !== 409) throw new Error(`Failed to start scan (${res.status})`)
 }
 
 export interface DateGroup {
@@ -103,12 +105,12 @@ export interface DateGroup {
 
 export async function fetchDates(): Promise<DateGroup[]> {
   const res = await fetch('/api/dates')
-  if (!res.ok) throw new Error('Failed to fetch dates')
+  if (!res.ok) throw new Error(`Failed to fetch dates (${res.status})`)
   return res.json()
 }
 
 export async function fetchAllImages(params: Omit<ImageParams, 'page'>): Promise<Image[]> {
-  const query = new URLSearchParams({ page: '1', limit: '9999' })
+  const query = new URLSearchParams({ page: '1', limit: FETCH_ALL_LIMIT })
   if (params.sort) query.set('sort', params.sort)
   if (params.order) query.set('order', params.order)
   if (params.minRating !== undefined) query.set('rating', String(params.minRating))
@@ -116,7 +118,7 @@ export async function fetchAllImages(params: Omit<ImageParams, 'page'>): Promise
   if (params.dateTo) query.set('to', params.dateTo)
 
   const res = await fetch(`/api/images?${query}`)
-  if (!res.ok) throw new Error('Failed to fetch images')
+  if (!res.ok) throw new Error(`Failed to fetch images (${res.status})`)
   const data: ImagesResponse = await res.json()
   return data.data
 }
