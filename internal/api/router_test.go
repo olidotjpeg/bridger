@@ -31,6 +31,10 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 		t.Fatal(err)
 	}
 
+	if _, err := database.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
+
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
 
@@ -43,7 +47,6 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 	cfg := &config.Config{ScanDirs: []string{"."}, DBPath: ":memory:", ThumbsPath: t.TempDir()}
 	router := SetupRouter(database, state, Config{
 		ThumbDir:   cfg.ThumbsPath,
-		NeedsSetup: false,
 		CurrentCfg: cfg,
 		ReconfigCh: reconfigCh,
 		SaveConfig: func(*config.Config) error { return nil },
@@ -166,7 +169,7 @@ func seedRouterImage(t *testing.T, database *sql.DB, path string) string {
 		Size:     1000,
 		MimeType: "image/jpeg",
 	}
-	if _, err := db.UpsertImagePath(database, file, "", ""); err != nil {
+	if _, err := db.UpsertImagePath(database, file, "", "", 0); err != nil {
 		t.Fatal(err)
 	}
 	var id string
@@ -483,7 +486,7 @@ func TestGetImageFull_RAW_WithPreview(t *testing.T) {
 		Size:     1000,
 		MimeType: "image/x-canon-cr2",
 	}
-	db.UpsertImagePath(database, rawFile, "", previewFile.Name())
+	db.UpsertImagePath(database, rawFile, "", previewFile.Name(), 0)
 
 	var id string
 	database.QueryRow("SELECT id FROM images WHERE file_path = ?", rawFile.Path).Scan(&id)
@@ -507,7 +510,7 @@ func TestGetImageFull_RAW_NoPreview(t *testing.T) {
 		Size:     1000,
 		MimeType: "image/x-canon-cr2",
 	}
-	db.UpsertImagePath(database, rawFile, "", "")
+	db.UpsertImagePath(database, rawFile, "", "", 0)
 
 	var id string
 	database.QueryRow("SELECT id FROM images WHERE file_path = ?", rawFile.Path).Scan(&id)
@@ -771,7 +774,6 @@ func TestPutConfig_ValidDir(t *testing.T) {
 
 	router := SetupRouter(database, state, Config{
 		ThumbDir:   cfg.ThumbsPath,
-		NeedsSetup: true,
 		CurrentCfg: cfg,
 		ReconfigCh: reconfigCh,
 	})

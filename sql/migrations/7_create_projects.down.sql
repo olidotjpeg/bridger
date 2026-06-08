@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS project_dirs;
+DROP TABLE IF EXISTS projects;

@@ -64,27 +64,42 @@ func (s *ScanState) TryStart() bool {
 	return true
 }
 
-func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanState) error {
+func RunScan(thumbDir string, database *sql.DB, state *ScanState) error {
+	dirProjectMap, err := db.GetDirProjectMap(database)
+	if err != nil {
+		state.mu.Lock()
+		state.Running = false
+		state.mu.Unlock()
+		return fmt.Errorf("failed to load project dirs: %w", err)
+	}
+
+	if len(dirProjectMap) == 0 {
+		state.mu.Lock()
+		state.Running = false
+		state.mu.Unlock()
+		return nil
+	}
+
 	var inserted, updated, skipped, errors int
 
-	var results []walk.FileInfo
+	type fileWithProject struct {
+		info      walk.FileInfo
+		projectID int
+	}
+
+	var results []fileWithProject
 	var scannedDirs []string
-	for _, dir := range walkDirs {
+	for dir, projectID := range dirProjectMap {
 		fmt.Printf("Scanning %s...\n", dir)
 		dirResults, err := walk.WalkDirectory(dir, thumbDir)
 		if err != nil {
 			fmt.Printf("  Skipping %s: %v\n", dir, err)
 			continue
 		}
-		results = append(results, dirResults...)
+		for _, r := range dirResults {
+			results = append(results, fileWithProject{info: r, projectID: projectID})
+		}
 		scannedDirs = append(scannedDirs, dir)
-	}
-
-	if len(walkDirs) == 0 {
-		state.mu.Lock()
-		state.Running = false
-		state.mu.Unlock()
-		return nil
 	}
 
 	fmt.Printf("Found %d files\n", len(results))
@@ -95,7 +110,8 @@ func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanSt
 	state.Errors = 0
 	state.mu.Unlock()
 
-	for _, result := range results {
+	for _, entry := range results {
+		result := entry.info
 		if exifData, err := exif.ExtractEXIF(result.Path); err == nil {
 			result.EXIFData = *exifData
 		}
@@ -111,7 +127,7 @@ func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanSt
 			thumbPath, _ = thumbs.GenerateThumbnail(result.Path, thumbDir)
 		}
 
-		action, err := db.UpsertImagePath(database, result, thumbPath, previewPath)
+		action, err := db.UpsertImagePath(database, result, thumbPath, previewPath, entry.projectID)
 		if err != nil {
 			errors++
 			state.mu.Lock()
@@ -135,7 +151,7 @@ func RunScan(walkDirs []string, thumbDir string, database *sql.DB, state *ScanSt
 
 	foundPaths := make(map[string]bool, len(results))
 	for _, r := range results {
-		foundPaths[r.Path] = true
+		foundPaths[r.info.Path] = true
 	}
 	if pruned, err := db.PruneStaleEntries(database, scannedDirs, foundPaths); err != nil {
 		fmt.Printf("  Prune error: %v\n", err)

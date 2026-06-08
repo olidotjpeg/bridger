@@ -33,6 +33,7 @@ export interface ImageParams {
   minRating?: number
   dateFrom?: string
   dateTo?: string
+  projectId?: number | null
 }
 
 const FETCH_ALL_LIMIT = '9999'
@@ -42,6 +43,7 @@ export async function fetchImages(params: ImageParams): Promise<ImagesResponse> 
   if (params.sort) query.set('sort', params.sort)
   if (params.order) query.set('order', params.order)
   if (params.minRating !== undefined) query.set('rating', String(params.minRating))
+  if (params.projectId != null) query.set('project_id', String(params.projectId))
 
   const res = await fetch(`/api/images?${query}`)
   if (!res.ok) throw new Error(`Failed to fetch images (${res.status})`)
@@ -116,6 +118,7 @@ export async function fetchAllImages(params: Omit<ImageParams, 'page'>): Promise
   if (params.minRating !== undefined) query.set('rating', String(params.minRating))
   if (params.dateFrom) query.set('from', params.dateFrom)
   if (params.dateTo) query.set('to', params.dateTo)
+  if (params.projectId != null) query.set('project_id', String(params.projectId))
 
   const res = await fetch(`/api/images?${query}`)
   if (!res.ok) throw new Error(`Failed to fetch images (${res.status})`)

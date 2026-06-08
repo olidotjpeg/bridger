@@ -25,7 +25,6 @@ type PaginatedResponse[T any] struct {
 
 type Config struct {
 	ThumbDir   string
-	NeedsSetup bool
 	CurrentCfg *config.Config
 	ReconfigCh chan<- config.Config
 	SaveConfig func(*config.Config) error // defaults to config.Save if nil
@@ -55,8 +54,13 @@ func SetupRouter(db *sql.DB, state *scanner.ScanState, cfg Config) *gin.Engine {
 	api.GET("/scan/status", getScanStatus(state))
 	api.POST("/scan", startNewScan(db, state, cfg))
 
-	api.GET("/config", getConfig(&cfg))
-	api.PUT("/config", putConfig(&cfg))
+	api.GET("/config", getConfig(db, &cfg))
+	api.PUT("/config", putConfig(db, &cfg))
+
+	api.GET("/projects", getProjects(db))
+	api.POST("/projects", postProject(db, &cfg))
+	api.PUT("/projects/:id", putProject(db, &cfg))
+	api.DELETE("/projects/:id", deleteProject(db, &cfg))
 
 	return router
 }
@@ -104,6 +108,11 @@ func getImagesInternal(db *sql.DB, cfg Config) gin.HandlerFunc {
 			dateTo = &t
 		}
 
+		var projectID *int
+		if p, err := strconv.Atoi(c.Query("project_id")); err == nil {
+			projectID = &p
+		}
+
 		q := database.ImageQuery{
 			Limit:     limit,
 			Offset:    offset,
@@ -112,6 +121,7 @@ func getImagesInternal(db *sql.DB, cfg Config) gin.HandlerFunc {
 			MinRating: minRating,
 			DateFrom:  dateFrom,
 			DateTo:    dateTo,
+			ProjectID: projectID,
 		}
 
 		images, count, _ := database.GetImagesWithCount(db, q)
@@ -254,7 +264,7 @@ func startNewScan(db *sql.DB, state *scanner.ScanState, cfg Config) gin.HandlerF
 		}
 
 		go func() {
-			if err := scanner.RunScan(cfg.CurrentCfg.ScanDirs, cfg.ThumbDir, db, state); err != nil {
+			if err := scanner.RunScan(cfg.ThumbDir, db, state); err != nil {
 				log.Printf("scan error: %v", err)
 			}
 		}()
@@ -262,18 +272,22 @@ func startNewScan(db *sql.DB, state *scanner.ScanState, cfg Config) gin.HandlerF
 	}
 }
 
-func getConfig(cfg *Config) gin.HandlerFunc {
+func getConfig(db *sql.DB, cfg *Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		projects, _ := database.GetAllProjects(db)
+		needsSetup := len(projects) == 0 && len(cfg.CurrentCfg.ScanDirs) == 0
 		c.JSON(http.StatusOK, gin.H{
-			"needs_setup": cfg.NeedsSetup,
-			"scan_dirs":   cfg.CurrentCfg.ScanDirs,
+			"needs_setup": needsSetup,
 			"db_path":     cfg.CurrentCfg.DBPath,
 			"thumbs_path": cfg.CurrentCfg.ThumbsPath,
 		})
 	}
 }
 
-func putConfig(cfg *Config) gin.HandlerFunc {
+// putConfig is used by the setup wizard to provide initial scan directories.
+// It creates one project per directory (named after the folder basename), then
+// clears scan_dirs from config and triggers the first scan.
+func putConfig(db *sql.DB, cfg *Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body struct {
 			ScanDirs []string `json:"scan_dirs" binding:"required"`
@@ -291,7 +305,29 @@ func putConfig(cfg *Config) gin.HandlerFunc {
 			}
 		}
 
-		cfg.CurrentCfg.ScanDirs = body.ScanDirs
+		for _, d := range body.ScanDirs {
+			name := filepath.Base(d)
+			proj, err := database.CreateProject(db, name)
+			if database.IsConflict(err) {
+				// project with this name already exists — find it and reuse
+				projects, _ := database.GetAllProjects(db)
+				for _, p := range projects {
+					if p.Name == name {
+						proj = p
+						break
+					}
+				}
+			} else if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to create project: " + err.Error()})
+				return
+			}
+			if err := database.AddDirToProject(db, proj.Id, d); err != nil && !database.IsConflict(err) {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to add dir to project: " + err.Error()})
+				return
+			}
+		}
+
+		cfg.CurrentCfg.ScanDirs = nil
 		saveFn := cfg.SaveConfig
 		if saveFn == nil {
 			saveFn = config.Save
@@ -301,7 +337,6 @@ func putConfig(cfg *Config) gin.HandlerFunc {
 			return
 		}
 
-		cfg.NeedsSetup = false
 		cfg.ReconfigCh <- *cfg.CurrentCfg
 
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
@@ -312,5 +347,144 @@ func putConfig(cfg *Config) gin.HandlerFunc {
 func getScanStatus(state *scanner.ScanState) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusOK, state.Status())
+	}
+}
+
+func getProjects(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		projects, err := database.GetAllProjects(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, projects)
+	}
+}
+
+func postProject(db *sql.DB, cfg *Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body struct {
+			Name string   `json:"name" binding:"required"`
+			Dirs []string `json:"dirs"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "name is required"})
+			return
+		}
+
+		proj, err := database.CreateProject(db, body.Name)
+		if err != nil {
+			if database.IsConflict(err) {
+				c.JSON(http.StatusConflict, gin.H{"message": "project name already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+			return
+		}
+
+		for _, d := range body.Dirs {
+			info, err := os.Stat(d)
+			if err != nil || !info.IsDir() {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "directory does not exist: " + d})
+				return
+			}
+			if err := database.AddDirToProject(db, proj.Id, d); err != nil && !database.IsConflict(err) {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+				return
+			}
+		}
+
+		cfg.ReconfigCh <- *cfg.CurrentCfg
+
+		projects, _ := database.GetAllProjects(db)
+		for _, p := range projects {
+			if p.Id == proj.Id {
+				c.JSON(http.StatusCreated, p)
+				return
+			}
+		}
+		c.JSON(http.StatusCreated, proj)
+	}
+}
+
+func putProject(db *sql.DB, cfg *Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid id"})
+			return
+		}
+
+		var body struct {
+			Name *string  `json:"name"`
+			Dirs []string `json:"dirs"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid request body"})
+			return
+		}
+
+		if body.Name != nil && *body.Name != "" {
+			if err := database.UpdateProjectName(db, id, *body.Name); err != nil {
+				if database.IsConflict(err) {
+					c.JSON(http.StatusConflict, gin.H{"message": "project name already exists"})
+					return
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+				return
+			}
+		}
+
+		if body.Dirs != nil {
+			for _, d := range body.Dirs {
+				info, err := os.Stat(d)
+				if err != nil || !info.IsDir() {
+					c.JSON(http.StatusBadRequest, gin.H{"message": "directory does not exist: " + d})
+					return
+				}
+			}
+
+			// Remove all current dirs for this project, then re-add the provided set.
+			if _, err := db.Exec("DELETE FROM project_dirs WHERE project_id = ?", id); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+				return
+			}
+			for _, d := range body.Dirs {
+				if err := database.AddDirToProject(db, id, d); err != nil && !database.IsConflict(err) {
+					c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+					return
+				}
+			}
+
+			cfg.ReconfigCh <- *cfg.CurrentCfg
+		}
+
+		projects, _ := database.GetAllProjects(db)
+		for _, p := range projects {
+			if p.Id == id {
+				c.JSON(http.StatusOK, p)
+				return
+			}
+		}
+		c.JSON(http.StatusNotFound, gin.H{"message": "project not found"})
+	}
+}
+
+func deleteProject(db *sql.DB, cfg *Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid id"})
+			return
+		}
+
+		if err := database.DeleteProject(db, id); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+			return
+		}
+
+		cfg.ReconfigCh <- *cfg.CurrentCfg
+
+		c.Status(http.StatusNoContent)
 	}
 }

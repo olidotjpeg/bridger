@@ -1,6 +1,5 @@
 export interface AppConfig {
   needs_setup: boolean
-  scan_dirs: string[]
   db_path: string
   thumbs_path: string
 }
