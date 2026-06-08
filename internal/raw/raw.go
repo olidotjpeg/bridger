@@ -7,6 +7,9 @@ import (
 	"image/jpeg"
 	"os"
 	"path/filepath"
+
+	"github.com/disintegration/imaging"
+	goexif "github.com/rwcarlsen/goexif/exif"
 )
 
 var mimeTypes = map[string]bool{
@@ -35,6 +38,8 @@ func GeneratePreview(srcPath, previewDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	buf = applyRawOrientation(srcPath, buf)
 
 	if err := os.WriteFile(previewPath, buf, 0644); err != nil {
 		return "", err
@@ -91,4 +96,62 @@ func extractEmbeddedJPEG(path string) ([]byte, error) {
 	out := make([]byte, len(bestData))
 	copy(out, bestData)
 	return out, nil
+}
+
+// applyRawOrientation reads the EXIF orientation from the RAW container and
+// physically rotates the extracted JPEG preview to match. Embedded JPEG previews
+// in RAW files often lack their own orientation tag — the rotation is stored in
+// the parent RAW's EXIF instead. Falls back to returning the original bytes on
+// any error so the preview is always usable even if orientation is unknown.
+func applyRawOrientation(rawPath string, jpegBuf []byte) []byte {
+	f, err := os.Open(rawPath)
+	if err != nil {
+		return jpegBuf
+	}
+	defer f.Close()
+
+	x, err := goexif.Decode(f)
+	if err != nil {
+		return jpegBuf
+	}
+
+	tag, err := x.Get(goexif.Orientation)
+	if err != nil {
+		return jpegBuf
+	}
+
+	orient, err := tag.Int(0)
+	if err != nil || orient <= 1 {
+		return jpegBuf
+	}
+
+	img, err := jpeg.Decode(bytes.NewReader(jpegBuf))
+	if err != nil {
+		return jpegBuf
+	}
+
+	switch orient {
+	case 2:
+		img = imaging.FlipH(img)
+	case 3:
+		img = imaging.Rotate180(img)
+	case 4:
+		img = imaging.FlipV(img)
+	case 5:
+		img = imaging.Transpose(img)
+	case 6:
+		img = imaging.Rotate270(img)
+	case 7:
+		img = imaging.Transverse(img)
+	case 8:
+		img = imaging.Rotate90(img)
+	default:
+		return jpegBuf
+	}
+
+	var out bytes.Buffer
+	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 92}); err != nil {
+		return jpegBuf
+	}
+	return out.Bytes()
 }

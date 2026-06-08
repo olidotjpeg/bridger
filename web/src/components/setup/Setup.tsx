@@ -178,9 +178,12 @@ export default function Setup({ config, onComplete }: SetupProps) {
                 <p className="setup-hint">
                   No supported images were found in the selected folders.
                 </p>
-                <button className="setup-btn-primary" onClick={onComplete}>
-                  Go to gallery anyway
-                </button>
+                <div className="setup-nav">
+                  <button className="setup-btn-ghost" onClick={() => setStep('select')}>← Change folders</button>
+                  <button className="setup-btn-primary" onClick={onComplete}>
+                    Go to gallery anyway
+                  </button>
+                </div>
               </>
             )}
           </div>
