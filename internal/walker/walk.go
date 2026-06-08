@@ -30,6 +30,8 @@ func WalkDirectory(walkingPath string, thumbDir string) ([]FileInfo, error) {
 	var paths []FileInfo
 	var extensions = []string{".png", ".jpg", ".jpeg", ".cr2", ".nef", ".arw", ".raf"}
 
+	absThumbDir, _ := filepath.Abs(thumbDir)
+
 	err := filepath.WalkDir(walkingPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if path == walkingPath {
@@ -47,7 +49,8 @@ func WalkDirectory(walkingPath string, thumbDir string) ([]FileInfo, error) {
 		}
 
 		if d.IsDir() {
-			if filepath.Clean(path) == filepath.Clean(thumbDir) {
+			absPath, _ := filepath.Abs(path)
+			if absThumbDir != "" && absPath == absThumbDir {
 				return fs.SkipDir
 			}
 			return nil

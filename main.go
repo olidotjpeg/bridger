@@ -88,6 +88,7 @@ func watchReconfig(ch <-chan config.Config, database *sql.DB, state *scanner.Sca
 			stopWatcher()
 		}
 		c := cfg
+		state.TryStart()
 		go func() {
 			if err := scanner.RunScan(c.ScanDirs, c.ThumbsPath, database, state); err != nil {
 				log.Printf("scan error: %v", err)
