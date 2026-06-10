@@ -137,11 +137,33 @@ func handleNewFile(path string, thumbDir string, database *sql.DB, state *scanne
 		}
 	}
 
-	if _, err := db.UpsertImagePath(database, *info, thumbPath, previewPath); err != nil {
+	projectID := projectIDForPath(absPath, database)
+
+	if _, err := db.UpsertImagePath(database, *info, thumbPath, previewPath, projectID); err != nil {
 		log.Printf("watcher: upsert failed for %s: %v", absPath, err)
 	} else {
 		log.Printf("watcher: indexed %s", absPath)
 		// Bump the processed counter on the shared state so the UI reflects activity
 		state.IncrementProcessed()
 	}
+}
+
+// projectIDForPath finds the project that owns the given file path by matching
+// it against all registered project directories.
+func projectIDForPath(absPath string, database *sql.DB) int {
+	dirProjectMap, err := db.GetDirProjectMap(database)
+	if err != nil {
+		return 0
+	}
+	for dir, pid := range dirProjectMap {
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(absDir, absPath)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			return pid
+		}
+	}
+	return 0
 }

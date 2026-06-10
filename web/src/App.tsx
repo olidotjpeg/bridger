@@ -29,6 +29,18 @@ function App() {
     queryClient.invalidateQueries({ queryKey: ['images'] })
   }
 
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(() => {
+    const stored = localStorage.getItem('bridger:lastProjectId')
+    return stored !== null ? Number(stored) : null
+  })
+
+  function handleProjectChange(id: number | null) {
+    setSelectedProjectId(id)
+    if (id === null) localStorage.removeItem('bridger:lastProjectId')
+    else localStorage.setItem('bridger:lastProjectId', String(id))
+    setPage(1)
+  }
+
   const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
@@ -43,20 +55,20 @@ function App() {
   const [cullDateTo, setCullDateTo] = useState<string | undefined>(undefined)
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['images', page, sort, order, minRating],
-    queryFn: () => fetchImages({ page, sort, order, minRating }),
+    queryKey: ['images', page, sort, order, minRating, selectedProjectId],
+    queryFn: () => fetchImages({ page, sort, order, minRating, projectId: selectedProjectId }),
     enabled: !groupByDate,
   })
 
   const { data: allImages, isLoading: allImagesLoading, isError: allImagesError, error: allImagesErrorDetail } = useQuery({
-    queryKey: ['images-all', sort, order, minRating],
-    queryFn: () => fetchAllImages({ sort, order, minRating }),
+    queryKey: ['images-all', sort, order, minRating, selectedProjectId],
+    queryFn: () => fetchAllImages({ sort, order, minRating, projectId: selectedProjectId }),
     enabled: groupByDate,
   })
 
   const { data: cullImages = [], isLoading: cullLoading } = useQuery({
-    queryKey: ['images-cull', sort, order, minRating, cullDateFrom, cullDateTo],
-    queryFn: () => fetchAllImages({ sort, order, minRating, dateFrom: cullDateFrom, dateTo: cullDateTo }),
+    queryKey: ['images-cull', sort, order, minRating, cullDateFrom, cullDateTo, selectedProjectId],
+    queryFn: () => fetchAllImages({ sort, order, minRating, dateFrom: cullDateFrom, dateTo: cullDateTo, projectId: selectedProjectId }),
     enabled: cullMode,
   })
 
@@ -169,6 +181,7 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['images'] })
       queryClient.invalidateQueries({ queryKey: ['images-all'] })
       queryClient.invalidateQueries({ queryKey: ['scan-status'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
     })
   }, [queryClient])
 
@@ -191,10 +204,12 @@ function App() {
             order={order}
             minRating={minRating}
             groupByDate={groupByDate}
+            selectedProjectId={selectedProjectId}
             onSortChange={v => { setSort(v); resetPage() }}
             onOrderChange={v => { setOrder(v); resetPage() }}
             onRatingChange={v => { setMinRating(v); resetPage() }}
             onGroupByDateChange={setGroupByDate}
+            onProjectChange={handleProjectChange}
             onCullClick={() => setCullPickerOpen(true)}
             scanStatus={scanStatus}
             onTriggerScan={() => scanMutation.mutate()}

@@ -18,6 +18,10 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
+
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "../../sql/migrations")
 
@@ -38,7 +42,7 @@ func TestUpsertImagePath_Insert(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	if _, err := UpsertImagePath(db, file, "", ""); err != nil {
+	if _, err := UpsertImagePath(db, file, "", "", 0); err != nil {
 		t.Fatalf("unexpect error: %v", err)
 	}
 
@@ -59,8 +63,8 @@ func TestUpsertImagePath_SkipUnchanged(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	UpsertImagePath(db, file, "", "")
-	if _, err := UpsertImagePath(db, file, "", ""); err != nil {
+	UpsertImagePath(db, file, "", "", 0)
+	if _, err := UpsertImagePath(db, file, "", "", 0); err != nil {
 		t.Fatalf("unexpected error on second upsert: %v", err)
 	}
 
@@ -81,10 +85,10 @@ func TestUpsertImagePath_UpdateChanged(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	UpsertImagePath(db, file, "", "")
+	UpsertImagePath(db, file, "", "", 0)
 
 	file.Size = 2000
-	if _, err := UpsertImagePath(db, file, "", ""); err != nil {
+	if _, err := UpsertImagePath(db, file, "", "", 0); err != nil {
 		t.Fatalf("unexpected error on update: %v", err)
 	}
 
@@ -103,7 +107,7 @@ func seedImage(t *testing.T, database *sql.DB, path string) string {
 		Size:     1000,
 		MimeType: "image/jpeg",
 	}
-	if _, err := UpsertImagePath(database, file, "", ""); err != nil {
+	if _, err := UpsertImagePath(database, file, "", "", 0); err != nil {
 		t.Fatal(err)
 	}
 	var id string
@@ -121,11 +125,11 @@ func TestUpsertImagePath_PreservesRating(t *testing.T) {
 		MimeType: "image/png",
 	}
 
-	UpsertImagePath(db, file, "", "")
+	UpsertImagePath(db, file, "", "", 0)
 	db.Exec("UPDATE images SET rating = 5 WHERE file_path = ?", file.Path)
 
 	file.Size = 2000
-	UpsertImagePath(db, file, "", "")
+	UpsertImagePath(db, file, "", "", 0)
 
 	var rating int
 	db.QueryRow("SELECT rating FROM images WHERE file_path = ?", file.Path).Scan(&rating)
@@ -317,7 +321,7 @@ func TestGetImagePath_Found(t *testing.T) {
 		Size:     1000,
 		MimeType: "image/jpeg",
 	}
-	UpsertImagePath(db, file, "", "")
+	UpsertImagePath(db, file, "", "", 0)
 
 	var id string
 	db.QueryRow("SELECT id FROM images WHERE file_path = ?", file.Path).Scan(&id)
@@ -626,5 +630,86 @@ func TestPruneStaleEntries_NoDirs(t *testing.T) {
 	}
 	if pruned != 0 {
 		t.Errorf("expected 0 pruned with no dirs, got %d", pruned)
+	}
+}
+
+// --- Projects ---
+
+func TestCreateProject(t *testing.T) {
+	db := setupTestDB(t)
+	proj, err := CreateProject(db, "Wedding 2024")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proj.Name != "Wedding 2024" {
+		t.Errorf("expected name Wedding 2024, got %s", proj.Name)
+	}
+	if proj.Id == 0 {
+		t.Error("expected non-zero ID")
+	}
+}
+
+func TestCreateProject_Conflict(t *testing.T) {
+	db := setupTestDB(t)
+	CreateProject(db, "MyProject")
+	_, err := CreateProject(db, "MyProject")
+	if err == nil {
+		t.Fatal("expected conflict error, got nil")
+	}
+	if !IsConflict(err) {
+		t.Error("expected IsConflict")
+	}
+}
+
+func TestGetAllProjects_WithDirs(t *testing.T) {
+	db := setupTestDB(t)
+	proj, _ := CreateProject(db, "Studio")
+	AddDirToProject(db, proj.Id, "/photos/studio")
+	AddDirToProject(db, proj.Id, "/photos/studio2")
+
+	projects, err := GetAllProjects(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	if len(projects[0].Dirs) != 2 {
+		t.Errorf("expected 2 dirs, got %d", len(projects[0].Dirs))
+	}
+}
+
+func TestDeleteProject_CascadesDirs(t *testing.T) {
+	db := setupTestDB(t)
+	proj, _ := CreateProject(db, "ToDelete")
+	AddDirToProject(db, proj.Id, "/some/path")
+
+	if err := DeleteProject(db, proj.Id); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM project_dirs WHERE project_id = ?", proj.Id).Scan(&count)
+	if count != 0 {
+		t.Errorf("expected 0 dirs after delete, got %d", count)
+	}
+}
+
+func TestGetDirProjectMap(t *testing.T) {
+	db := setupTestDB(t)
+	p1, _ := CreateProject(db, "A")
+	p2, _ := CreateProject(db, "B")
+	AddDirToProject(db, p1.Id, "/photos/a")
+	AddDirToProject(db, p2.Id, "/photos/b")
+
+	m, err := GetDirProjectMap(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m["/photos/a"] != p1.Id {
+		t.Errorf("expected /photos/a → %d, got %d", p1.Id, m["/photos/a"])
+	}
+	if m["/photos/b"] != p2.Id {
+		t.Errorf("expected /photos/b → %d, got %d", p2.Id, m["/photos/b"])
 	}
 }

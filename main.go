@@ -45,17 +45,46 @@ func main() {
 		log.Fatal(err)
 	}
 
-	needsSetup := config.NeedsSetup(cfg)
+	// Migrate existing scan_dirs from config into projects (one-time, on upgrade).
+	if len(cfg.ScanDirs) > 0 {
+		projects, _ := db.GetAllProjects(database)
+		if len(projects) == 0 {
+			for _, dir := range cfg.ScanDirs {
+				proj, err := db.CreateProject(database, filepath.Base(dir))
+				if err != nil && !db.IsConflict(err) {
+					log.Printf("config migration: failed to create project for %s: %v", dir, err)
+					continue
+				}
+				if db.IsConflict(err) {
+					all, _ := db.GetAllProjects(database)
+					for _, p := range all {
+						if p.Name == filepath.Base(dir) {
+							proj = p
+							break
+						}
+					}
+				}
+				if err := db.AddDirToProject(database, proj.Id, dir); err != nil && !db.IsConflict(err) {
+					log.Printf("config migration: failed to add dir %s: %v", dir, err)
+				}
+			}
+			cfg.ScanDirs = nil
+			if err := config.Save(cfg); err != nil {
+				log.Printf("config migration: failed to save config: %v", err)
+			}
+		}
+	}
+
 	state := &scanner.ScanState{}
 	reconfigCh := make(chan config.Config, 1)
 
-	if !needsSetup {
+	dirs, _ := db.GetAllScanDirs(database)
+	if len(dirs) > 0 {
 		reconfigCh <- *cfg
 	}
 
 	router := api.SetupRouter(database, state, api.Config{
 		ThumbDir:   cfg.ThumbsPath,
-		NeedsSetup: needsSetup,
 		CurrentCfg: cfg,
 		ReconfigCh: reconfigCh,
 	})
@@ -90,12 +119,20 @@ func watchReconfig(ch <-chan config.Config, database *sql.DB, state *scanner.Sca
 		c := cfg
 		state.TryStart()
 		go func() {
-			if err := scanner.RunScan(c.ScanDirs, c.ThumbsPath, database, state); err != nil {
+			if err := scanner.RunScan(c.ThumbsPath, database, state); err != nil {
 				log.Printf("scan error: %v", err)
 			}
 			onScanDone()
 		}()
-		stop, err := watcher.Watch(cfg.ScanDirs, cfg.ThumbsPath, database, state)
+		dirs, err := db.GetAllScanDirs(database)
+		if err != nil {
+			log.Printf("watcher: failed to load dirs: %v", err)
+			continue
+		}
+		if len(dirs) == 0 {
+			continue
+		}
+		stop, err := watcher.Watch(dirs, cfg.ThumbsPath, database, state)
 		if err != nil {
 			log.Printf("watcher: failed to start: %v", err)
 			continue

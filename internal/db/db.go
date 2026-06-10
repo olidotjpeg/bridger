@@ -34,6 +34,128 @@ type Tag struct {
 	Name string `json:"name"`
 }
 
+type Project struct {
+	Id        int      `json:"id"`
+	Name      string   `json:"name"`
+	Dirs      []string `json:"dirs"`
+	CreatedAt string   `json:"created_at"`
+}
+
+func GetAllProjects(db *sql.DB) ([]Project, error) {
+	rows, err := db.Query(`
+		SELECT p.id, p.name, p.created_at, pd.dir_path
+		FROM projects p
+		LEFT JOIN project_dirs pd ON pd.project_id = p.id
+		ORDER BY p.id, pd.dir_path
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type entry struct {
+		id        int
+		name      string
+		createdAt string
+		dirs      []string
+	}
+	order := []int{}
+	byID := map[int]*entry{}
+	for rows.Next() {
+		var id int
+		var name, createdAt string
+		var dirPath sql.NullString
+		if err := rows.Scan(&id, &name, &createdAt, &dirPath); err != nil {
+			return nil, err
+		}
+		if _, ok := byID[id]; !ok {
+			byID[id] = &entry{id: id, name: name, createdAt: createdAt, dirs: []string{}}
+			order = append(order, id)
+		}
+		if dirPath.Valid {
+			byID[id].dirs = append(byID[id].dirs, dirPath.String)
+		}
+	}
+
+	projects := make([]Project, 0, len(order))
+	for _, id := range order {
+		e := byID[id]
+		projects = append(projects, Project{Id: e.id, Name: e.name, Dirs: e.dirs, CreatedAt: e.createdAt})
+	}
+	return projects, nil
+}
+
+func CreateProject(db *sql.DB, name string) (Project, error) {
+	res, err := db.Exec("INSERT INTO projects (name) VALUES (?)", name)
+	if err != nil {
+		return Project{}, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Project{}, err
+	}
+	return Project{Id: int(id), Name: name, Dirs: []string{}}, nil
+}
+
+func UpdateProjectName(db *sql.DB, id int, name string) error {
+	_, err := db.Exec("UPDATE projects SET name = ? WHERE id = ?", name, id)
+	return err
+}
+
+func DeleteProject(db *sql.DB, id int) error {
+	_, err := db.Exec("DELETE FROM projects WHERE id = ?", id)
+	return err
+}
+
+func AddDirToProject(db *sql.DB, projectID int, dir string) error {
+	_, err := db.Exec("INSERT INTO project_dirs (project_id, dir_path) VALUES (?, ?)", projectID, dir)
+	return err
+}
+
+func RemoveDirFromProject(db *sql.DB, projectID int, dir string) error {
+	_, err := db.Exec("DELETE FROM project_dirs WHERE project_id = ? AND dir_path = ?", projectID, dir)
+	return err
+}
+
+// GetAllScanDirs returns every dir_path across all projects for use by the scanner and watcher.
+func GetAllScanDirs(db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT dir_path FROM project_dirs")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dirs []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		dirs = append(dirs, d)
+	}
+	return dirs, nil
+}
+
+// GetDirProjectMap returns a map of dir_path → project_id for every registered directory.
+func GetDirProjectMap(db *sql.DB) (map[string]int, error) {
+	rows, err := db.Query("SELECT dir_path, project_id FROM project_dirs")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	m := map[string]int{}
+	for rows.Next() {
+		var dir string
+		var pid int
+		if err := rows.Scan(&dir, &pid); err != nil {
+			return nil, err
+		}
+		m[dir] = pid
+	}
+	return m, nil
+}
+
 func GetAllTags(db *sql.DB) ([]Tag, error) {
 	rows, err := db.Query("SELECT id, name FROM tags ORDER BY name ASC")
 	if err != nil {
@@ -97,11 +219,11 @@ type ImageQuery struct {
 	MinRating     *int    // nil = no filter
 	DateFrom      *string // nil = no filter, format "2025-04-05"
 	DateTo        *string // nil = no filter, format "2025-04-07"
+	ProjectID     *int    // nil = all projects
 }
 
 func Database(dbPath string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", dbPath)
-
 	if err != nil {
 		return db, err
 	}
@@ -110,10 +232,14 @@ func Database(dbPath string) (*sql.DB, error) {
 		return db, err
 	}
 
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return db, err
+	}
+
 	return db, err
 }
 
-func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath string) (string, error) {
+func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath string, projectID int) (string, error) {
 	var existingSize int64
 	err := db.QueryRow("SELECT file_size FROM images WHERE file_path = ?", filePath.Path).Scan(&existingSize)
 
@@ -144,9 +270,14 @@ func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath 
 		return f
 	}
 
+	var nullProjectID any
+	if projectID != 0 {
+		nullProjectID = projectID
+	}
+
 	_, err = db.Exec(`
-	INSERT INTO images (file_path, filename, file_size, mime_type, thumbnail_path, preview_path, capture_date, width, height, camera_model, iso, aperture, shutter_speed, focal_length, index_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO images (file_path, filename, file_size, mime_type, thumbnail_path, preview_path, capture_date, width, height, camera_model, iso, aperture, shutter_speed, focal_length, project_id, index_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(file_path) DO UPDATE SET
 			file_size      = excluded.file_size,
 			thumbnail_path = excluded.thumbnail_path,
@@ -159,10 +290,11 @@ func UpsertImagePath(db *sql.DB, filePath walk.FileInfo, thumbPath, previewPath 
 			aperture       = excluded.aperture,
 			shutter_speed  = excluded.shutter_speed,
 			focal_length   = excluded.focal_length,
+			project_id     = excluded.project_id,
 			index_at       = excluded.index_at
 	`, filePath.Path, filePath.FileName, filePath.Size, filePath.MimeType, thumbPath, previewPath, filePath.CaptureDate, filePath.Width, filePath.Height,
 		nullStr(filePath.CameraModel), nullStr(filePath.ISO), nullF32(filePath.Aperture), nullStr(filePath.ShutterSpeed), nullF32(filePath.FocalLength),
-		time.Now().UTC())
+		nullProjectID, time.Now().UTC())
 
 	if err != nil {
 		log.Printf("error inserting %s: %v", filePath.Path, err)
@@ -189,6 +321,10 @@ func GetImagesWithCount(db *sql.DB, q ImageQuery) ([]Image, int, error) {
 	if q.DateTo != nil {
 		conditions = append(conditions, "DATE(capture_date) <= ?")
 		args = append(args, *q.DateTo)
+	}
+	if q.ProjectID != nil {
+		conditions = append(conditions, "project_id = ?")
+		args = append(args, *q.ProjectID)
 	}
 	where := ""
 	if len(conditions) > 0 {

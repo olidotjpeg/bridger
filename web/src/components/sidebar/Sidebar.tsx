@@ -1,15 +1,18 @@
 import './Sidebar.css'
 import type { ScanStatus } from '../../api/images'
+import ProjectSidebar from '../projects/ProjectSidebar'
 
 interface SidebarProps {
   sort: string
   order: string
   minRating: number | undefined
   groupByDate: boolean
+  selectedProjectId: number | null
   onSortChange: (sort: string) => void
   onOrderChange: (order: string) => void
   onRatingChange: (rating: number | undefined) => void
   onGroupByDateChange: (v: boolean) => void
+  onProjectChange: (id: number | null) => void
   onCullClick: () => void
   scanStatus?: ScanStatus
   onTriggerScan: () => void
@@ -24,7 +27,7 @@ const RATING_OPTIONS: { label: string; value: number | undefined }[] = [
   { label: '5', value: 5 },
 ]
 
-export default function Sidebar({ sort, order, minRating, groupByDate, onSortChange, onOrderChange, onRatingChange, onGroupByDateChange, onCullClick, scanStatus, onTriggerScan }: SidebarProps) {
+export default function Sidebar({ sort, order, minRating, groupByDate, selectedProjectId, onSortChange, onOrderChange, onRatingChange, onGroupByDateChange, onProjectChange, onCullClick, scanStatus, onTriggerScan }: SidebarProps) {
   const isRunning = scanStatus?.running ?? false
   const progress = isRunning && scanStatus && scanStatus.total > 0
     ? Math.round((scanStatus.processed / scanStatus.total) * 100)
@@ -33,6 +36,8 @@ export default function Sidebar({ sort, order, minRating, groupByDate, onSortCha
   return (
     <div className="sidebar">
       <div className="sidebar-logo">Bridger</div>
+
+      <ProjectSidebar selectedProjectId={selectedProjectId} onSelect={onProjectChange} />
 
       <div className="sidebar-section">
         <span className="sidebar-label">Sort by</span>
